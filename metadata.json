@@ -1,0 +1,5 @@
+{
+  "name": "HAST-Agent Workflow Visualizer",
+  "description": "An interactive web application that visualizes the Hybrid Application Security Testing (HAST) Agent System workflow, simulating the process from code deployment to vulnerability reporting.",
+  "requestFramePermissions": []
+}
