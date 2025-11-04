@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { NodeKey } from './types';
 
@@ -9,13 +8,13 @@ const iconProps = {
 export const WORKFLOW_NODES = {
     deploy_sandbox: {
         label: "Deploy Sandbox",
-        icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9M3 12a9 9 0 019-9m0 18a9 9 0 00-9-9m9 9h9" /></svg>),
-        position: { top: '10%', left: '50%' },
+        icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" /></svg>),
+        position: { top: '2%', left: '50%' },
     },
     sast_scan: {
         label: "SAST Scan",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" /></svg>),
-        position: { top: '30%', left: '50%' },
+        position: { top: '26%', left: '50%' },
     },
     plan_attack: {
         label: "Plan Attack",
@@ -25,27 +24,27 @@ export const WORKFLOW_NODES = {
     run_dast: {
         label: "Run DAST",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>),
-        position: { top: '70%', left: '50%' },
+        position: { top: '74%', left: '50%' },
     },
     destroy_sandbox: {
         label: "Destroy Sandbox",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>),
-        position: { top: '90%', left: '50%' },
+        position: { top: '98%', left: '50%' },
     },
     report_build_failure: {
         label: "Report: Build Failed",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>),
-        position: { top: '30%', left: '15%' },
+        position: { top: '14%', left: '5%' },
     },
     report_exploit_found: {
         label: "Report: Exploit Found",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12 12 0 0012 21a12 12 0 008.618-4.969v.001z" /></svg>),
-        position: { top: '70%', left: '15%' },
+        position: { top: '74%', left: '5%' },
     },
     report_no_exploit: {
         label: "Report: Not Exploitable",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>),
-        position: { top: '70%', left: '85%' },
+        position: { top: '74%', left: '95%' },
     },
 };
 

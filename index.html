@@ -1,11 +1,15 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HAST-Agent Workflow Visualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
     <style>
       /* For custom scrollbars */
       ::-webkit-scrollbar {
@@ -13,14 +17,26 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1f2937; /* gray-800 */
+        background: #f1f5f9; /* slate-100 */
       }
       ::-webkit-scrollbar-thumb {
-        background: #4b5563; /* gray-600 */
+        background: #94a3b8; /* slate-400 */
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* slate-500 */
+      }
+      .dark ::-webkit-scrollbar-track {
+        background: #1f2937; /* gray-800 */
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #4b5563; /* gray-600 */
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
         background: #6b7280; /* gray-500 */
+      }
+      body.no-scroll {
+        overflow: hidden;
       }
     </style>
   <script type="importmap">
@@ -33,7 +49,7 @@
 }
 </script>
 </head>
-  <body class="bg-gray-900 text-gray-200 font-sans">
+  <body class="bg-slate-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

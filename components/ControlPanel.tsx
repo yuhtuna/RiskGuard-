@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 interface ControlPanelProps {
@@ -12,10 +11,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ sourceCodeUrl, setSourceCod
     const [failureMode, setFailureMode] = useState<'none' | 'build' | 'exploit'>('none');
     
     return (
-        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-gray-300 border-b border-gray-600 pb-2">Controls</h2>
+        <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex flex-col gap-4">
+            <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 pb-2">Controls</h2>
             <div>
-                <label htmlFor="sourceCodeUrl" className="block text-sm font-medium text-gray-400 mb-1">
+                <label htmlFor="sourceCodeUrl" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Source Code URL
                 </label>
                 <input
@@ -24,11 +23,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ sourceCodeUrl, setSourceCod
                     value={sourceCodeUrl}
                     onChange={(e) => setSourceCodeUrl(e.target.value)}
                     disabled={isRunning}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-sky-500 focus:border-sky-500 transition"
+                    className="w-full bg-slate-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-800 dark:text-gray-200 focus:ring-sky-500 focus:border-sky-500 transition"
                 />
             </div>
              <div>
-                <label htmlFor="failureMode" className="block text-sm font-medium text-gray-400 mb-1">
+                <label htmlFor="failureMode" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Simulation Scenario
                 </label>
                 <select 
@@ -36,7 +35,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ sourceCodeUrl, setSourceCod
                     value={failureMode}
                     onChange={(e) => setFailureMode(e.target.value as 'none' | 'build' | 'exploit')}
                     disabled={isRunning}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-sky-500 focus:border-sky-500 transition"
+                    className="w-full bg-slate-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-800 dark:text-gray-200 focus:ring-sky-500 focus:border-sky-500 transition"
                 >
                     <option value="none">Success (Exploit Found)</option>
                     <option value="exploit">Failure (Not Exploitable)</option>
@@ -46,7 +45,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ sourceCodeUrl, setSourceCod
             <button
                 onClick={() => onStartScan(failureMode)}
                 disabled={isRunning}
-                className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all duration-200 ease-in-out flex items-center justify-center gap-2"
+                className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-400 dark:disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all duration-200 ease-in-out flex items-center justify-center gap-2"
             >
                 {isRunning ? (
                     <>

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { NodeStatus } from '../types';
 
@@ -12,13 +11,13 @@ interface WorkflowNodeProps {
 
 const WorkflowNode: React.FC<WorkflowNodeProps> = ({ label, icon, position, status, isActive }) => {
     const statusClasses: Record<NodeStatus, string> = {
-        pending: 'bg-gray-700 border-gray-600 text-gray-400',
-        active: 'bg-sky-900/50 border-sky-500 text-sky-300',
-        success: 'bg-green-900/50 border-green-500 text-green-300',
-        failure: 'bg-red-900/50 border-red-500 text-red-300',
+        pending: 'bg-slate-200 dark:bg-gray-700 border-slate-300 dark:border-gray-600 text-slate-500 dark:text-gray-400',
+        active: 'bg-sky-100 dark:bg-sky-900/50 border-sky-500 text-sky-600 dark:text-sky-300',
+        success: 'bg-green-100 dark:bg-green-900/50 border-green-500 text-green-600 dark:text-green-300',
+        failure: 'bg-red-100 dark:bg-red-900/50 border-red-500 text-red-600 dark:text-red-300',
     };
 
-    const activeRing = isActive ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-gray-800' : '';
+    const activeRing = isActive ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-slate-200 dark:ring-offset-gray-800' : '';
     const glow = isActive ? 'animate-pulse' : '';
 
     return (
