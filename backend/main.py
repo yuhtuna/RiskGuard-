@@ -46,7 +46,8 @@ def start_scan():
             yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
             scan_state["local_repo_path"] = git_clone_repo(source_code_url, LOCAL_REPO_PATH)
             scan_state["sandbox_url"], scan_state["service_name"] = deploy_to_sandbox(scan_state["local_repo_path"], GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME)
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': f'Deployed sandbox to {scan_state["sandbox_url"]}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            sandbox_url = scan_state["sandbox_url"]
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': f'Deployed sandbox to {sandbox_url}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
             yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
             time.sleep(1)
 
@@ -65,7 +66,8 @@ def start_scan():
             yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'error', 'log': {'message': f'An error occurred: {e}', 'type': 'error', 'timestamp': time.time()}}})}\n\n"
+            error_msg = str(e)
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'error', 'log': {'message': f'An error occurred: {error_msg}', 'type': 'error', 'timestamp': time.time()}}})}\n\n"
             if scan_state["service_name"]:
                 destroy_sandbox(scan_state["service_name"], GCP_PROJECT_ID, GCP_REGION)
             yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
@@ -101,7 +103,8 @@ def run_dast():
             yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'error', 'log': {'message': f'An error occurred: {e}', 'type': 'error', 'timestamp': time.time()}}})}\n\n"
+            error_msg = str(e)
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'error', 'log': {'message': f'An error occurred: {error_msg}', 'type': 'error', 'timestamp': time.time()}}})}\n\n"
 
         finally:
             # --- Destroy Sandbox ---
