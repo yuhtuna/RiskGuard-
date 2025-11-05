@@ -29,12 +29,18 @@ export type FinalReport = {
     message: string;
 } | null;
 
+export type SuggestedFix = {
+    file_path: string;
+    description: string;
+    patch: string;
+};
 
 export interface HASTGraphState {
     source_code_url: string;
     sandbox_url: string;
     build_status: 'PENDING' | 'SUCCESS' | 'FAILURE';
     sast_report: SastFinding[];
+    suggested_fixes: SuggestedFix[];
     attack_plan: { target_url: string; vulnerability_type: string; payload: string }[];
     dast_report: DastFinding[];
     final_report: FinalReport;

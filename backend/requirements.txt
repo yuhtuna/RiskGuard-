@@ -4,3 +4,4 @@ google-cloud-build==3.23.0
 google-cloud-run
 google-cloud-storage
 gunicorn==22.0.0
+python-dotenv

@@ -102,3 +102,27 @@ You will need to run both the backend and frontend servers simultaneously in two
     *   **Apply a Fix:** Triggers the `/api/apply-fix` endpoint to patch the code in the local workspace.
     *   **Run DAST Scan:** Triggers the `/api/run-dast` endpoint to continue the workflow, run the DAST scan, and destroy the sandbox.
     *   **Confirm and Push:** Triggers the `/api/confirm-and-push` endpoint to commit the changes to a new branch and push to the remote repository.
+
+
+## 🐳 Docker Support for Uploaded Projects
+
+RiskGuard supports scanning projects that include a `Dockerfile` for custom build and deployment. If your uploaded zip file contains a `Dockerfile` at the root, it will be used to build and run your application in the sandbox environment. This allows you to specify custom dependencies, build steps, or entrypoints for your app.
+
+If your project does **not** include a `Dockerfile` but contains a `requirements.txt`, RiskGuard will attempt to auto-generate a suitable Dockerfile for Python projects. For best results, always provide a complete `requirements.txt` or your own Dockerfile.
+
+**Note:**
+- If you use a custom Dockerfile, ensure it exposes the correct port (usually 8080) and starts your application properly.
+- If you use a requirements.txt, make sure it is complete (see below).
+
+---
+## ⚠️ Important: Uploading Your Project for Scanning
+
+When uploading your own project (as a zip file) for scanning, **make sure your project folder contains a complete and accurate `requirements.txt` file** listing all Python dependencies your application needs to run. This is critical for successful deployment and scanning in the sandbox environment.
+
+- You can generate a complete `requirements.txt` by running:
+  ```bash
+  pip freeze > requirements.txt
+  ```
+- If a required library is missing, your application will fail to start in the sandbox
+
+**Always double-check your `requirements.txt` before uploading!**

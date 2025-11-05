@@ -57,7 +57,7 @@ const WorkflowDiagram: React.FC<WorkflowDiagramProps> = ({ nodeStatuses, activeN
     }, [resetView]);
     
     const handleWheel = useCallback((e: React.WheelEvent) => {
-        e.preventDefault();
+        // e.preventDefault(); // This line is causing the passive listener warning
         const { deltaY } = e;
         const scaleAmount = -deltaY * 0.001;
         const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, viewState.scale * (1 + scaleAmount)));
