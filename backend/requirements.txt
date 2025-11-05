@@ -1,5 +1,5 @@
 Flask==3.0.3
 GitPython==3.1.43
 google-cloud-build==3.23.0
-google-cloud-run-v2==0.13.0
+google-cloud-run
 gunicorn==22.0.0
