@@ -63,153 +63,183 @@ const App: React.FC = () => {
         setScanError(null);
     }, []);
     
-    const handleStartScan = useCallback(async (file: File | null) => {
-        if (!file) {
-            setScanError("No file selected.");
+    const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+        };
+        reader.onerror = error => reject(error);
+    });
+
+const handleStartScan = useCallback(async (file: File | null) => {
+    if (!file) {
+        setScanError("No file selected.");
+        return;
+    }
+    resetState();
+    setIsRunning(true);
+    setActionLogs(prev => [...prev, {
+        key: 'file_upload',
+        title: 'Uploading and Verifying File',
+        status: 'active',
+        detailLogs: [{ message: `Uploading ${file.name}...`, type: 'info', timestamp: (Date.now() / 1000).toString() }]
+    }]);
+
+    try {
+        const base64File = await fileToBase64(file);
+        const response = await fetch('/start_full_scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ zip_file_base64: base64File }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
+            setScanError(errorMessage);
+            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Upload failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
+            setIsRunning(false);
             return;
         }
-        resetState();
-        setIsRunning(true);
-        setActionLogs(prev => [...prev, {
-            key: 'file_upload',
-            title: 'Uploading and Verifying File',
-            status: 'active',
-            detailLogs: [{ message: `Uploading ${file.name}...`, type: 'info', timestamp: (Date.now() / 1000).toString() }]
-        }]);
         
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
+        setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'success', detailLogs: [...a.detailLogs, { message: 'File uploaded and verified.', type: 'success', timestamp: (Date.now() / 1000).toString() }] } : a));
 
-            const response = await fetch('/api/upload-scan', {
-                method: 'POST',
-                body: formData,
-            });
+        if (!response.body) {
+            throw new Error("Response has no body");
+        }
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
-                setScanError(errorMessage);
-                setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Upload failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
-                setIsRunning(false);
-                return;
-            }
-            
-            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'success', detailLogs: [...a.detailLogs, { message: 'File uploaded and verified.', type: 'success', timestamp: (Date.now() / 1000).toString() }] } : a));
+        await handleSseStream(response);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        setScanError(errorMessage);
+        setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Scan failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
+        setIsRunning(false);
+    }
+}, [resetState]);
 
+const handleSseStream = async (response: Response) => {
+    if (!response.body) {
+        throw new Error("Response has no body");
+    }
 
-            if (!response.body) {
-                throw new Error("Response has no body");
-            }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let finalState = null;
 
-            const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-            
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                
-                const lines = value.split('\n\n');
-                for (const line of lines) {
-                    if (line.startsWith('data:')) {
-                        if(line.substring(5).trim()){
-                            try {
-                                const data = JSON.parse(line.substring(5));
-                                const { type, payload } = data;
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-                                switch (type) {
-                                    case 'node_status':
-                                        setNodeStatuses(prev => ({ ...prev, [payload.node]: payload.status }));
-                                        if (payload.status === 'active') {
-                                            setActiveNode(payload.node);
-                                            const actionKey = payload.node as keyof typeof actionMap;
-                                            if (actionMap[actionKey]) {
-                                            setActionLogs(prev => {
-                                                if (prev.find(a => a.key === actionKey)) return prev;
-                                                return [...prev, { key: actionKey, title: actionMap[actionKey], status: 'active', detailLogs: [] }];
-                                            });
-                                            }
-                                        } else if (payload.status === 'success' || payload.status === 'failure') {
-                                        setActionLogs(prev => prev.map(a => a.key === payload.node ? { ...a, status: payload.status } : a));
-                                        }
-                                        break;
-                                    case 'log':
-                                        setActionLogs(prev => {
-                                            const actionExists = prev.some(a => a.key === payload.actionKey);
-                                            if (!actionExists && payload.actionKey !== 'start') {
-                                                return [...prev, { 
-                                                    key: payload.actionKey, 
-                                                    title: actionMap[payload.actionKey as keyof typeof actionMap] || 'General', 
-                                                    status: 'active', 
-                                                    detailLogs: [payload.log]
-                                                }];
-                                            }
-                                            return prev.map(action =>
-                                                action.key === payload.actionKey
-                                                    ? { ...action, detailLogs: [...action.detailLogs, payload.log] }
-                                                    : action
-                                            );
-                                        });
-                                        break;
-                                    case 'state':
-                                        setGraphState(prev => ({ ...prev, ...payload }));
-                                        break;
-                                    case 'control':
-                                        if (payload.status === 'finished') {
-                                           setIsRunning(false);
-                                           setActiveNode(null);
-                                        }
-                                        break;
-                                    default:
-                                        console.warn("Unknown event type:", type);
-                                }
-                            } catch (e) {
-                                console.error("Failed to parse SSE data:", line.substring(5));
-                            }
+        const lines = value.trim().split('\n');
+        for (const line of lines) {
+            if (line.startsWith('data:')) {
+                const jsonStr = line.substring(5).trim();
+                if (jsonStr) {
+                    try {
+                        const data = JSON.parse(jsonStr);
+                        if (data.is_final) {
+                            finalState = data.result;
+                            continue;
                         }
+                        const { type, payload } = data;
+                        switch (type) {
+                            case 'node_status':
+                                setNodeStatuses(prev => ({ ...prev, [payload.node]: payload.status }));
+                                if (payload.status === 'active') {
+                                    setActiveNode(payload.node);
+                                    const actionKey = payload.node as keyof typeof actionMap;
+                                    if (actionMap[actionKey]) {
+                                        setActionLogs(prev => {
+                                            if (prev.find(a => a.key === actionKey)) return prev;
+                                            return [...prev, { key: actionKey, title: actionMap[actionKey], status: 'active', detailLogs: [] }];
+                                        });
+                                    }
+                                } else if (payload.status === 'success' || payload.status === 'failure') {
+                                    setActionLogs(prev => prev.map(a => a.key === payload.node ? { ...a, status: payload.status } : a));
+                                }
+                                break;
+                            case 'log':
+                                setActionLogs(prev => {
+                                    const actionExists = prev.some(a => a.key === payload.actionKey);
+                                    if (!actionExists && payload.actionKey !== 'start') {
+                                        return [...prev, {
+                                            key: payload.actionKey,
+                                            title: actionMap[payload.actionKey as keyof typeof actionMap] || 'General',
+                                            status: 'active',
+                                            detailLogs: [payload.log]
+                                        }];
+                                    }
+                                    return prev.map(action =>
+                                        action.key === payload.actionKey
+                                            ? { ...action, detailLogs: [...action.detailLogs, payload.log] }
+                                            : action
+                                    );
+                                });
+                                break;
+                            case 'state':
+                                setGraphState(prev => ({ ...prev, ...payload }));
+                                break;
+                            case 'control':
+                                if (payload.status === 'finished') {
+                                    setIsRunning(false);
+                                    setActiveNode(null);
+                                }
+                                break;
+                            default:
+                                console.warn("Unknown event type:", type);
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse SSE data:", jsonStr, e);
                     }
                 }
             }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            setScanError(errorMessage);
-            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Scan failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
-            setIsRunning(false);
         }
-    }, [resetState]);
+    }
+    if (finalState) {
+        setGraphState(finalState);
+    }
+};
 
-
-    const handleApplyFix = useCallback(async (patch: string) => {
-        try {
-            const response = await fetch('/api/apply-fix', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ patch }),
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to apply fix');
-            }
-            setAppliedFixes(prev => [...prev, patch]);
-            // Maybe show a success notification
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            setScanError(`Apply fix failed: ${errorMessage}`);
+const handleApplyFix = useCallback(async (patch: string) => {
+    try {
+        const response = await fetch('/apply_fix_and_update_state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patch, current_graph_state: graphState }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to apply fix');
         }
-    }, []);
+        const newState = await response.json();
+        setGraphState(newState);
+        setAppliedFixes(prev => [...prev, patch]);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        setScanError(`Apply fix failed: ${errorMessage}`);
+    }
+}, [graphState]);
 
-    const handleRunDast = useCallback(async () => {
-        try {
-            const response = await fetch('/api/run-dast', { method: 'POST' });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to start DAST scan');
-            }
-            // The rest of the flow is handled by the SSE stream
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            setScanError(`DAST scan failed to start: ${errorMessage}`);
+const handleRunDast = useCallback(async () => {
+    try {
+        const response = await fetch('/continue_scan_with_dast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_graph_state: graphState }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to start DAST scan');
         }
-    }, []);
+
+        await handleSseStream(response);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        setScanError(`DAST scan failed to start: ${errorMessage}`);
+    }
+}, [graphState]);
 
     const hasReport = !isRunning && graphState.final_report;
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
@@ -240,6 +270,7 @@ const App: React.FC = () => {
                                 onApplyFix={handleApplyFix}
                                 onRunDast={handleRunDast}
                                 appliedFixes={appliedFixes}
+                                graphState={graphState}
                             />
                         </div>
                     )}

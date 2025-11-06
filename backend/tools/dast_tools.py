@@ -1,6 +1,10 @@
-import time
-import requests # Simulating an API call to a Cloud Run Job
+import os
+import requests
+from google.adk.tools import tool
+import google.auth
+import google.auth.transport.requests
 
+@tool
 def execute_exploit(attack_step: dict) -> dict:
     """
     Triggers a secure, isolated Cloud Run Job to execute a single DAST attack step.
@@ -11,28 +15,36 @@ def execute_exploit(attack_step: dict) -> dict:
     Returns:
         A dictionary with the result of the exploit attempt.
     """
-    # In a real application, this URL would be the endpoint of your
-    # separate Cloud Run Job that is responsible for running exploits.
-    cloud_run_job_url = "https://your-secure-exploit-executor-job.a.run.app"
+    # The URL of the secure Cloud Run Job responsible for running exploits.
+    # This should be configured as an environment variable.
+    cloud_run_job_url = os.environ.get("DAST_JOB_URL")
+    if not cloud_run_job_url:
+        raise ValueError("DAST_JOB_URL environment variable is not set.")
 
     print(f"Triggering exploit job for: {attack_step['description']}")
 
-    # This simulates making an authenticated API call to the Cloud Run Job
-    # and waiting for its result.
-    # response = requests.post(cloud_run_job_url, json=attack_step, headers={"Authorization": "Bearer ..."})
-    # return response.json()
+    # Get an identity token for authenticating to the Cloud Run Job.
+    # This assumes the current environment has the necessary permissions.
+    auth_req = google.auth.transport.requests.Request()
+    id_token = google.auth.id_token.fetch_id_token(auth_req, cloud_run_job_url)
 
-    # Mocked response for this example:
-    time.sleep(2) # Simulate network latency and job execution time
-    if attack_step['type'] == 'exploit':
-        return {
-            'success': True,
-            'proof': 'Successfully bypassed login with SQL injection.',
-            'output': 'Admin dashboard content...'
-        }
-    else:
+    headers = {
+        "Authorization": f"Bearer {id_token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(
+            cloud_run_job_url,
+            json=attack_step,
+            headers=headers,
+            timeout=300 # 5 minute timeout for the job
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes
+        return response.json()
+    except requests.exceptions.RequestException as e:
         return {
             'success': False,
-            'proof': 'Failed to access the protected endpoint.',
-            'output': '403 Forbidden'
+            'proof': 'Failed to trigger or complete the DAST job.',
+            'output': str(e)
         }

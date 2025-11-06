@@ -2,6 +2,7 @@ import os
 import uuid
 import tarfile
 from typing import Tuple
+from google.adk.tools import tool
 from google.cloud import storage
 from google.cloud.devtools import cloudbuild_v1
 from google.cloud import run_v2
@@ -90,6 +91,7 @@ def _upload_source_to_gcs(local_repo_path: str, project_id: str, bucket_name: st
     os.remove(tarball_path)
     return object_name
 
+@tool
 def deploy_to_sandbox(local_repo_path: str, project_id: str, region: str, bucket_name: str) -> Tuple[str, str]:
     """
     Deploys a containerized application to a temporary Cloud Run service.
@@ -161,6 +163,7 @@ def deploy_to_sandbox(local_repo_path: str, project_id: str, region: str, bucket
 
     yield service_uri, service_name
 
+@tool
 def destroy_sandbox(service_name: str, project_id: str, region: str) -> None:
     """
     Destroys a temporary Cloud Run service.

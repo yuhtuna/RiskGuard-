@@ -1,40 +1,31 @@
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import PromptTemplate
+from langchain.schema.output_parser import StrOutputParser
 import json
 
 def create_attack_plan(sast_report: dict, sandbox_url: str) -> dict:
     """
     Creates a DAST attack plan based on the SAST report.
-
-    Args:
-        sast_report: The SAST report from the previous step.
-        sandbox_url: The URL of the live sandbox environment.
-
-    Returns:
-        A dictionary representing the DAST attack plan.
     """
-    # In a real application, this would use a generative AI model to create a
-    # detailed attack plan based on the SAST vulnerabilities.
-    # For this example, we'll generate a mock plan.
+    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.5)
+    prompt = PromptTemplate.from_template("""
+Given the following SAST report, create a DAST attack plan for the live application at {sandbox_url}.
+For each vulnerability, devise a specific HTTP request (including target URL, method, headers, and payload) to confirm or exploit it.
 
-    attack_steps = []
-    for vulnerability in sast_report.get('vulnerabilities', []):
-        if vulnerability['type'] == 'SQL Injection':
-            attack_steps.append({
-                'type': 'exploit',
-                'target': f"{sandbox_url}/login",
-                'payload': "' OR 1=1 --",
-                'description': f"Attempt to exploit SQL Injection at {sandbox_url}/login"
-            })
-        elif vulnerability['type'] == 'Hardcoded Secret':
-            attack_steps.append({
-                'type': 'information_gathering',
-                'target': f"{sandbox_url}/api/users",
-                'headers': {'X-API-KEY': 'hardcoded_secret_value'},
-                'description': "Attempt to access a protected endpoint using the hardcoded secret."
-            })
+SAST Report:
+{sast_report}
 
-    attack_plan = {
-        'steps': attack_steps,
-        'summary': f"Created an attack plan with {len(attack_steps)} steps."
-    }
+Return the plan in a valid JSON format.
+""")
 
-    return attack_plan
+    chain = prompt | llm | StrOutputParser()
+
+    response = chain.invoke({
+        "sast_report": str(sast_report),
+        "sandbox_url": sandbox_url
+    })
+
+    try:
+        return json.loads(response.replace("```json", "").replace("```", ""))
+    except json.JSONDecodeError:
+        return {"steps": [], "summary": "Failed to parse attack plan."}
