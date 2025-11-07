@@ -35,11 +35,14 @@ RUN chmod +x /start.sh
 # Copy the built frontend assets from the build stage
 COPY --from=build /app/dist ./dist
 
-# Copy the backend code and requirements
-COPY ./backend ./backend
+# Copy only the backend requirements file first
+COPY ./backend/requirements.txt ./backend/requirements.txt
 
 # Install backend dependencies
 RUN pip install --no-cache-dir -r ./backend/requirements.txt
+
+# Now copy the rest of the backend code
+COPY ./backend ./backend
 
 # Expose the port Nginx will listen on
 EXPOSE 8080
