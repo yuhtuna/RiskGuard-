@@ -49,6 +49,7 @@ You will also need a Google Cloud Storage (GCS) bucket to temporarily store the 
     ```bash
     pip install -r requirements.txt
     ```
+    **Note:** The `requirements.txt` file contains pinned versions of all dependencies. This ensures that the application is built with the exact same libraries every time, which leads to faster and more reliable deployments, especially on Google Cloud Run.
 
 4.  **Authenticate with Google Cloud:**
     ```bash
