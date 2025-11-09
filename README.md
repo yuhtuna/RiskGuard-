@@ -14,7 +14,7 @@ The application is composed of two main parts:
 Before you begin, ensure you have the following installed:
 
 *   **Node.js** (v18 or later)
-*   **Python** (v3.10 or later)
+*   **Python** (v3.12 or later)
 *   **pip** (Python package installer)
 *   **Google Cloud SDK** (`gcloud` CLI)
 *   **A Secure Cloud Run Job for DAST:** You must have a separate, secure Cloud Run Job deployed to execute DAST attacks.

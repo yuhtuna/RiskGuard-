@@ -1,0 +1,9 @@
+Flask
+GitPython
+google-cloud-build
+google-cloud-run
+google-cloud-storage
+gunicorn
+python-dotenv
+google-adk
+langchain-google-genai
