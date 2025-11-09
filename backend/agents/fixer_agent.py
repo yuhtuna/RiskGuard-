@@ -1,9 +1,12 @@
 import os
+import langchain
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 
 from tools.sast_tools import read_source_code
+
+langchain.verbose = False
 
 def generate_fixes(sast_report: dict, local_repo_path: str) -> dict:
     """

@@ -1,10 +1,13 @@
 import os
 import json
+import langchain
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 
 from tools.sast_tools import read_source_code
+
+langchain.verbose = False
 
 def run_sast_scan(local_repo_path: str) -> dict:
     """
