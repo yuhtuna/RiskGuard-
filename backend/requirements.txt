@@ -5,5 +5,5 @@ google-cloud-run
 google-cloud-storage
 gunicorn==22.0.0
 python-dotenv
-google-adk
-langchain-google-genai
+# google-adk
+# langchain-google-genai

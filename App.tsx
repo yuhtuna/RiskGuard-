@@ -90,7 +90,7 @@ const handleStartScan = useCallback(async (file: File | null) => {
 
     try {
         const base64File = await fileToBase64(file);
-        const response = await fetch('/start_full_scan', {
+        const response = await fetch('http://127.0.0.1:8080/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ zip_file_base64: base64File }),
@@ -204,10 +204,10 @@ const handleSseStream = async (response: Response) => {
 
 const handleApplyFix = useCallback(async (patch: string) => {
     try {
-        const response = await fetch('/apply_fix_and_update_state', {
+        const response = await fetch('http://127.0.0.1:8080/api/apply-fix', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ patch, current_graph_state: graphState }),
+            body: JSON.stringify({ patch, graph_state: graphState }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -224,10 +224,10 @@ const handleApplyFix = useCallback(async (patch: string) => {
 
 const handleRunDast = useCallback(async () => {
     try {
-        const response = await fetch('/continue_scan_with_dast', {
+        const response = await fetch('http://127.0.0.1:8080/api/continue-scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ current_graph_state: graphState }),
+            body: JSON.stringify({ graph_state: graphState }),
         });
         if (!response.ok) {
             const errorData = await response.json();

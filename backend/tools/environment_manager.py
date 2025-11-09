@@ -2,7 +2,6 @@ import os
 import uuid
 import tarfile
 from typing import Tuple
-from google.adk.tools import tool
 from google.cloud import storage
 from google.cloud.devtools import cloudbuild_v1
 from google.cloud import run_v2
@@ -79,8 +78,9 @@ class CloudBuildLogStreamer:
 
 def _upload_source_to_gcs(local_repo_path: str, project_id: str, bucket_name: str) -> str:
     """Uploads the source code to a GCS bucket and returns the object name."""
+    import tempfile
     object_name = f"source-{uuid.uuid4()}.tar.gz"
-    tarball_path = f"/tmp/{object_name}"
+    tarball_path = os.path.join(tempfile.gettempdir(), object_name)
     with tarfile.open(tarball_path, "w:gz") as tar:
         tar.add(local_repo_path, arcname='.')
 
@@ -91,7 +91,6 @@ def _upload_source_to_gcs(local_repo_path: str, project_id: str, bucket_name: st
     os.remove(tarball_path)
     return object_name
 
-@tool
 def deploy_to_sandbox(local_repo_path: str, project_id: str, region: str, bucket_name: str) -> Tuple[str, str]:
     """
     Deploys a containerized application to a temporary Cloud Run service.
@@ -163,7 +162,6 @@ def deploy_to_sandbox(local_repo_path: str, project_id: str, region: str, bucket
 
     yield service_uri, service_name
 
-@tool
 def destroy_sandbox(service_name: str, project_id: str, region: str) -> None:
     """
     Destroys a temporary Cloud Run service.

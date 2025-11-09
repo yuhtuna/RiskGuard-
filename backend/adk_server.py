@@ -4,10 +4,12 @@ import zipfile
 import base64
 import json
 import time
+import tempfile
 from typing import Dict, Any
 
-from google.adk.tools import tool
-from google.adk.runtime import adk
+from flask import Flask, request, jsonify, Response
+from flask_cors import CORS, cross_origin
+
 from agents.planning_agent import create_attack_plan
 from agents.fixer_agent import generate_fixes
 from agents.sast_agent import run_sast_scan
@@ -16,115 +18,165 @@ from tools.environment_manager import deploy_to_sandbox, destroy_sandbox
 from tools.git_workspace import git_apply_patch
 from tools.dockerfile_generator import generate_dockerfile
 
+app = Flask(__name__)
+CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
 GCP_REGION = os.environ.get("GCP_REGION", "us-central1")
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "your-gcs-bucket-name")
-LOCAL_REPO_PATH = '/tmp/repo'
+LOCAL_REPO_PATH = os.path.join(tempfile.gettempdir(), 'repo')
 
 scan_state = {
     "local_repo_path": LOCAL_REPO_PATH,
+    "sandbox_url": None,
+    "service_name": None,
+    "sast_report": None,
 }
 
-@tool
-def start_full_scan(zip_file_base64: str) -> Dict[str, Any]:
+@app.route('/api/scan', methods=['POST'])
+@cross_origin()
+def start_full_scan() -> Response:
     """
-    Accepts a Base64-encoded ZIP file, extracts it, and starts the scanning process.
+    Accepts a JSON payload with a Base64-encoded ZIP file, extracts it, 
+    and starts the scanning process.
     This tool orchestrates the initial part of the scan including sandbox deployment
     and SAST scanning.
     """
-    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+    data = request.get_json()
+    if 'zip_file_base64' not in data:
+        return jsonify({'error': 'zip_file_base64 not found in request'}), 400
+    
+    zip_file_base64 = data['zip_file_base64']
 
-    # Decode and extract the zip file
-    zip_content = base64.b64decode(zip_file_base64)
-    if os.path.exists(LOCAL_REPO_PATH):
-        shutil.rmtree(LOCAL_REPO_PATH)
-    os.makedirs(LOCAL_REPO_PATH, exist_ok=True)
-    zip_path = "/tmp/source.zip"
-    with open(zip_path, 'wb') as f:
-        f.write(zip_content)
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(LOCAL_REPO_PATH)
-    os.remove(zip_path)
+    def generate_scan_events():
+        try:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
 
-    extracted_files = os.listdir(LOCAL_REPO_PATH)
-    if len(extracted_files) == 1 and os.path.isdir(os.path.join(LOCAL_REPO_PATH, extracted_files[0])):
-        sub_dir = os.path.join(LOCAL_REPO_PATH, extracted_files[0])
-        for item in os.listdir(sub_dir):
-            shutil.move(os.path.join(sub_dir, item), LOCAL_REPO_PATH)
-        os.rmdir(sub_dir)
+            # Decode and extract the zip file
+            zip_content = base64.b64decode(zip_file_base64)
+            if os.path.exists(LOCAL_REPO_PATH):
+                shutil.rmtree(LOCAL_REPO_PATH)
+            os.makedirs(LOCAL_REPO_PATH, exist_ok=True)
+            zip_path = os.path.join(tempfile.gettempdir(), "source.zip")
+            with open(zip_path, 'wb') as f:
+                f.write(zip_content)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(LOCAL_REPO_PATH)
+            os.remove(zip_path)
 
-    dockerfile_path, _ = generate_dockerfile(LOCAL_REPO_PATH)
-    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile is at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            extracted_files = os.listdir(LOCAL_REPO_PATH)
+            if len(extracted_files) == 1 and os.path.isdir(os.path.join(LOCAL_REPO_PATH, extracted_files[0])):
+                sub_dir = os.path.join(LOCAL_REPO_PATH, extracted_files[0])
+                for item in os.listdir(sub_dir):
+                    shutil.move(os.path.join(sub_dir, item), LOCAL_REPO_PATH)
+                os.rmdir(sub_dir)
 
-    # Deploy Sandbox
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
-    service_url, service_name = deploy_to_sandbox(LOCAL_REPO_PATH, GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME)
-    scan_state["sandbox_url"] = service_url
-    scan_state["service_name"] = service_name
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
+            dockerfile_path, _ = generate_dockerfile(LOCAL_REPO_PATH)
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile is at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
 
-    # SAST Scan
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'active'}})}\n\n"
-    sast_report = run_sast_scan(LOCAL_REPO_PATH)
-    scan_state["sast_report"] = sast_report
-    yield f"data: {json.dumps({'type': 'state', 'payload': {'sast_report': sast_report}})}\n\n"
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'success'}})}\n\n"
+            # Deploy Sandbox
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
+            
+            # deploy_to_sandbox is a generator that yields log entries and finally the (service_url, service_name)
+            deployment_gen = deploy_to_sandbox(LOCAL_REPO_PATH, GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME)
+            service_url = None
+            service_name = None
+            
+            for item in deployment_gen:
+                if isinstance(item, tuple) and len(item) == 2:
+                    # Final result: (service_url, service_name)
+                    service_url, service_name = item
+                else:
+                    # Log entry from build process
+                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            
+            scan_state["sandbox_url"] = service_url
+            scan_state["service_name"] = service_name
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
 
-    # Generate Fixes
-    fixes = generate_fixes(sast_report, LOCAL_REPO_PATH)
-    scan_state["suggested_fixes"] = fixes
-    yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
+            # SAST Scan
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'active'}})}\n\n"
+            sast_report = run_sast_scan(LOCAL_REPO_PATH)
+            scan_state["sast_report"] = sast_report
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'sast_report': sast_report}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'success'}})}\n\n"
 
-    yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
+            # Generate Fixes
+            fixes = generate_fixes(sast_report, LOCAL_REPO_PATH)
+            scan_state["suggested_fixes"] = fixes
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
 
-    return scan_state
+            yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
+        
+        except Exception as e:
+            error_msg = f"Scan error: {str(e)}"
+            yield f"data: {json.dumps({'type': 'error', 'payload': {'message': error_msg}})}\n\n"
+            import traceback
+            traceback.print_exc()
 
-@tool
-def apply_fix_and_update_state(patch: str, current_graph_state: Dict[str, Any]) -> Dict[str, Any]:
+    return Response(generate_scan_events(), mimetype='text/event-stream')
+
+
+@app.route('/api/apply-fix', methods=['POST'])
+@cross_origin()
+def apply_fix_and_update_state() -> Dict[str, Any]:
     """
     Applies a patch and updates the scan state.
     """
+    data = request.get_json()
+    patch = data.get('patch')
+    current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
     git_apply_patch(patch, scan_state["local_repo_path"])
-    return scan_state
+    return jsonify(scan_state)
 
-@tool
-def continue_scan_with_dast(current_graph_state: Dict[str, Any]) -> Dict[str, Any]:
+@app.route('/api/continue-scan', methods=['POST'])
+@cross_origin()
+def continue_scan_with_dast() -> Response:
     """
     Continues the scan with DAST and then cleans up the environment.
     """
+    data = request.get_json()
+    current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
 
-    # Plan Attack
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
-    attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'success'}})}\n\n"
+    def generate_dast_events():
+        # Plan Attack
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
+        attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'success'}})}\n\n"
 
-    # DAST Scan
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'active'}})}\n\n"
-    dast_report = run_dast_scan(attack_plan)
-    scan_state["dast_report"] = dast_report
-    yield f"data: {json.dumps({'type': 'state', 'payload': {'dast_report': dast_report}})}\n\n"
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'success'}})}\n\n"
+        # DAST Scan
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'active'}})}\n\n"
+        dast_report = run_dast_scan(attack_plan)
+        scan_state["dast_report"] = dast_report
+        yield f"data: {json.dumps({'type': 'state', 'payload': {'dast_report': dast_report}})}\n\n"
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'success'}})}\n\n"
 
-    # Destroy Sandbox
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'destroy_sandbox', 'status': 'active'}})}\n\n"
-    destroy_sandbox(scan_state["service_name"], GCP_PROJECT_ID, GCP_REGION)
-    yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'destroy_sandbox', 'status': 'success'}})}\n\n"
+        # Destroy Sandbox
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'destroy_sandbox', 'status': 'active'}})}\n\n"
+        destroy_sandbox(scan_state["service_name"], GCP_PROJECT_ID, GCP_REGION)
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'destroy_sandbox', 'status': 'success'}})}\n\n"
 
-    return scan_state
+    return Response(generate_dast_events(), mimetype='text/event-stream')
 
-@tool
-def download_fixed_code(current_graph_state: Dict[str, Any]) -> Dict[str, str]:
+
+@app.route('/api/download', methods=['POST'])
+@cross_origin()
+def download_fixed_code() -> Dict[str, str]:
     """
     Zips the fixed code and returns it as a Base64-encoded string.
     """
+    data = request.get_json()
+    current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
-    zip_path = shutil.make_archive("/tmp/fixed_source", 'zip', scan_state["local_repo_path"])
+    zip_base = os.path.join(tempfile.gettempdir(), "fixed_source")
+    zip_path = shutil.make_archive(zip_base, 'zip', scan_state["local_repo_path"])
     with open(zip_path, 'rb') as f:
         zip_content = f.read()
     os.remove(zip_path)
-    return {"data": base64.b64encode(zip_content).decode('utf-8')}
+    return jsonify({"data": base64.b64encode(zip_content).decode('utf-8')})
 
 if __name__ == '__main__':
-    adk.run()
+    app.run(host='0.0.0.0', port=8080, debug=True)
