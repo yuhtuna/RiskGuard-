@@ -7,8 +7,9 @@ import time
 import tempfile
 from typing import Dict, Any
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_from_directory
 from flask_cors import CORS, cross_origin
+from flask_swagger_ui import get_swaggerui_blueprint
 
 from agents.planning_agent import create_attack_plan
 from agents.fixer_agent import generate_fixes
@@ -22,6 +23,20 @@ app = Flask(__name__)
 CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
+# Swagger UI configuration
+SWAGGER_URL = '/api/docs'
+API_URL = '/api/swagger.json'
+
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name': "RiskGuard Security Scanner API"
+    }
+)
+
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
 GCP_REGION = os.environ.get("GCP_REGION", "us-central1")
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "your-gcs-bucket-name")
@@ -33,6 +48,11 @@ scan_state = {
     "service_name": None,
     "sast_report": None,
 }
+
+@app.route('/api/swagger.json')
+def swagger_spec():
+    """Serve the OpenAPI specification file"""
+    return send_from_directory('.', 'swagger.json')
 
 @app.route('/api/scan', methods=['POST'])
 @cross_origin()
