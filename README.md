@@ -1,23 +1,23 @@
 # HAST Agent Workflow Visualizer
 
-This project is a full-stack application designed to demonstrate an AI-driven security workflow. It clones a user-provided Git repository, deploys it to a temporary sandbox environment on Google Cloud, runs a simulated SAST (Static Application Security Testing) scan, generates potential fixes, and orchestrates a DAST (Dynamic Application Security Testing) scan based on the findings.
+This project is a full-stack application designed to demonstrate an AI-driven security workflow. It analyzes an uploaded user application, deploys it to a temporary sandbox environment on Google Cloud, runs a generative AI-powered SAST (Static Application Security Testing) scan, generates potential fixes, and orchestrates a DAST (Dynamic Application Security Testing) scan based on the findings.
 
 ## Project Architecture
 
 The application is composed of two main parts:
 
-1.  **Frontend:** A React-based single-page application built with Vite that provides the user interface for initiating scans, viewing progress, and interacting with the results.
-2.  **Backend:** A Python Flask server that orchestrates the entire security workflow, including cloning repositories, interacting with Google Cloud services, and running the various scanning and fixing "agents."
+1.  **Frontend:** A React-based single-page application built with Vite that provides the user interface for uploading an application, initiating scans, viewing progress, and interacting with the results.
+2.  **Backend:** A Python server built with the **Google Application Development Kit (ADK)** that orchestrates the entire security workflow, including interacting with Google Cloud services and running the various scanning and fixing "agents."
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
 *   **Node.js** (v18 or later)
-*   **Python** (v3.8 or later)
+*   **Python** (v3.12 or later)
 *   **pip** (Python package installer)
 *   **Google Cloud SDK** (`gcloud` CLI)
-*   **Git**
+*   **A Secure Cloud Run Job for DAST:** You must have a separate, secure Cloud Run Job deployed to execute DAST attacks.
 
 ## Setup and Configuration
 
@@ -49,6 +49,7 @@ You will also need a Google Cloud Storage (GCS) bucket to temporarily store the 
     ```bash
     pip install -r requirements.txt
     ```
+    **Note:** The `requirements.txt` file contains pinned versions of all dependencies. This ensures that the application is built with the exact same libraries every time, which leads to faster and more reliable deployments, especially on Google Cloud Run.
 
 4.  **Authenticate with Google Cloud:**
     ```bash
@@ -61,6 +62,7 @@ You will also need a Google Cloud Storage (GCS) bucket to temporarily store the 
     *   `GCP_PROJECT_ID`: Your Google Cloud project ID.
     *   `GCP_REGION`: The Google Cloud region where you want to deploy the sandbox services (e.g., `us-central1`).
     *   `GCS_BUCKET_NAME`: The name of your Google Cloud Storage bucket for source code.
+    *   `DAST_JOB_URL`: The URL of your secure Cloud Run Job for executing DAST exploits.
 
 ### 3. Frontend Setup
 
@@ -78,9 +80,10 @@ You will need to run both the backend and frontend servers simultaneously in two
 1.  **Start the Backend Server:**
     *   Make sure you are in the `backend` directory with your virtual environment activated.
     *   Ensure your environment variables are set.
-    *   Run the Flask server:
+    *   Run the ADK server using Flask:
         ```bash
-        python3 main.py
+        export FLASK_APP=adk_server.py
+        flask run --port=8080
         ```
     The backend server will start on `http://localhost:8080`.
 
@@ -95,24 +98,20 @@ You will need to run both the backend and frontend servers simultaneously in two
 ## How It Works
 
 1.  Open the application in your browser (`http://localhost:3000`).
-2.  Enter the URL of a public Git repository you want to scan.
+2.  Upload a ZIP file of the application you want to scan.
 3.  Click "Start Scan." The backend will begin the workflow, and you will see real-time progress updates in the UI.
 4.  The scan will pause after the SAST scan is complete and suggested fixes have been generated.
-5.  At this point, you can interact with the application to (these are simulated):
-    *   **Apply a Fix:** Triggers the `/api/apply-fix` endpoint to patch the code in the local workspace.
-    *   **Run DAST Scan:** Triggers the `/api/run-dast` endpoint to continue the workflow, run the DAST scan, and destroy the sandbox.
-    *   **Confirm and Push:** Triggers the `/api/confirm-and-push` endpoint to commit the changes to a new branch and push to the remote repository.
+5.  At this point, you can interact with the application to:
+    *   **Apply a Fix:** Triggers the backend to patch the code in the local workspace.
+    *   **Run DAST Scan:** Continues the workflow, runs the DAST scan against the live sandbox, and finally destroys the sandbox.
+    *   **Download Code:** Downloads a ZIP file of the application with the applied fixes.
 
 
 ## 🐳 Docker Support for Uploaded Projects
 
-RiskGuard supports scanning projects that include a `Dockerfile` for custom build and deployment. If your uploaded zip file contains a `Dockerfile` at the root, it will be used to build and run your application in the sandbox environment. This allows you to specify custom dependencies, build steps, or entrypoints for your app.
+The application supports scanning projects that include a `Dockerfile` for custom build and deployment. If your uploaded zip file contains a `Dockerfile` at the root, it will be used to build and run your application in the sandbox environment.
 
-If your project does **not** include a `Dockerfile` but contains a `requirements.txt`, RiskGuard will attempt to auto-generate a suitable Dockerfile for Python projects. For best results, always provide a complete `requirements.txt` or your own Dockerfile.
-
-**Note:**
-- If you use a custom Dockerfile, ensure it exposes the correct port (usually 8080) and starts your application properly.
-- If you use a requirements.txt, make sure it is complete (see below).
+If your project does **not** include a `Dockerfile` but contains a `requirements.txt` (for Python projects), the application will attempt to auto-generate a suitable Dockerfile.
 
 ---
 ## ⚠️ Important: Uploading Your Project for Scanning
@@ -123,6 +122,6 @@ When uploading your own project (as a zip file) for scanning, **make sure your p
   ```bash
   pip freeze > requirements.txt
   ```
-- If a required library is missing, your application will fail to start in the sandbox
+- If a required library is missing, your application will fail to start in the sandbox.
 
 **Always double-check your `requirements.txt` before uploading!**

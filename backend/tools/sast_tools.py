@@ -1,5 +1,7 @@
 import os
+from google.adk.tools import tool
 
+@tool
 def read_source_code(file_path: str) -> str:
     """
     Reads the content of a file from the local workspace.

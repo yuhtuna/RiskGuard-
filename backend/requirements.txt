@@ -1,7 +1,9 @@
-Flask==3.0.3
-GitPython==3.1.43
-google-cloud-build==3.23.0
+Flask
+GitPython
+google-cloud-build
 google-cloud-run
 google-cloud-storage
-gunicorn==22.0.0
+gunicorn
 python-dotenv
+google-adk
+langchain-google-genai
