@@ -63,183 +63,168 @@ const App: React.FC = () => {
         setScanError(null);
     }, []);
     
-    const fileToBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-        };
-        reader.onerror = error => reject(error);
-    });
-
-const handleStartScan = useCallback(async (file: File | null) => {
-    if (!file) {
-        setScanError("No file selected.");
-        return;
-    }
-    resetState();
-    setIsRunning(true);
-    setActionLogs(prev => [...prev, {
-        key: 'file_upload',
-        title: 'Uploading and Verifying File',
-        status: 'active',
-        detailLogs: [{ message: `Uploading ${file.name}...`, type: 'info', timestamp: (Date.now() / 1000).toString() }]
-    }]);
-
-    try {
-        const base64File = await fileToBase64(file);
-        const response = await fetch('http://127.0.0.1:8080/api/scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ zip_file_base64: base64File }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
-            setScanError(errorMessage);
-            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Upload failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
-            setIsRunning(false);
-            return;
-        }
-        
-        setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'success', detailLogs: [...a.detailLogs, { message: 'File uploaded and verified.', type: 'success', timestamp: (Date.now() / 1000).toString() }] } : a));
-
+    const handleSseStream = async (response: Response) => {
         if (!response.body) {
             throw new Error("Response has no body");
         }
 
-        await handleSseStream(response);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        setScanError(errorMessage);
-        setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Scan failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
-        setIsRunning(false);
-    }
-}, [resetState]);
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let finalState = null;
 
-const handleSseStream = async (response: Response) => {
-    if (!response.body) {
-        throw new Error("Response has no body");
-    }
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let finalState = null;
-
-    while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        const lines = value.trim().split('\n');
-        for (const line of lines) {
-            if (line.startsWith('data:')) {
-                const jsonStr = line.substring(5).trim();
-                if (jsonStr) {
-                    try {
-                        const data = JSON.parse(jsonStr);
-                        if (data.is_final) {
-                            finalState = data.result;
-                            continue;
-                        }
-                        const { type, payload } = data;
-                        switch (type) {
-                            case 'node_status':
-                                setNodeStatuses(prev => ({ ...prev, [payload.node]: payload.status }));
-                                if (payload.status === 'active') {
-                                    setActiveNode(payload.node);
-                                    const actionKey = payload.node as keyof typeof actionMap;
-                                    if (actionMap[actionKey]) {
-                                        setActionLogs(prev => {
-                                            if (prev.find(a => a.key === actionKey)) return prev;
-                                            return [...prev, { key: actionKey, title: actionMap[actionKey], status: 'active', detailLogs: [] }];
-                                        });
+            const lines = value.trim().split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const jsonStr = line.substring(5).trim();
+                    if (jsonStr) {
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            if (data.is_final) {
+                                finalState = data.result;
+                                continue;
+                            }
+                            const { type, payload } = data;
+                            switch (type) {
+                                case 'node_status':
+                                    setNodeStatuses(prev => ({ ...prev, [payload.node]: payload.status }));
+                                    if (payload.status === 'active') {
+                                        setActiveNode(payload.node);
+                                        const actionKey = payload.node as keyof typeof actionMap;
+                                        if (actionMap[actionKey]) {
+                                            setActionLogs(prev => {
+                                                if (prev.find(a => a.key === actionKey)) return prev;
+                                                return [...prev, { key: actionKey, title: actionMap[actionKey], status: 'active', detailLogs: [] }];
+                                            });
+                                        }
+                                    } else if (payload.status === 'success' || payload.status === 'failure') {
+                                        setActionLogs(prev => prev.map(a => a.key === payload.node ? { ...a, status: payload.status } : a));
                                     }
-                                } else if (payload.status === 'success' || payload.status === 'failure') {
-                                    setActionLogs(prev => prev.map(a => a.key === payload.node ? { ...a, status: payload.status } : a));
-                                }
-                                break;
-                            case 'log':
-                                setActionLogs(prev => {
-                                    const actionExists = prev.some(a => a.key === payload.actionKey);
-                                    if (!actionExists && payload.actionKey !== 'start') {
-                                        return [...prev, {
-                                            key: payload.actionKey,
-                                            title: actionMap[payload.actionKey as keyof typeof actionMap] || 'General',
-                                            status: 'active',
-                                            detailLogs: [payload.log]
-                                        }];
+                                    break;
+                                case 'log':
+                                    setActionLogs(prev => {
+                                        const actionExists = prev.some(a => a.key === payload.actionKey);
+                                        if (!actionExists && payload.actionKey !== 'start') {
+                                            return [...prev, {
+                                                key: payload.actionKey,
+                                                title: actionMap[payload.actionKey as keyof typeof actionMap] || 'General',
+                                                status: 'active',
+                                                detailLogs: [payload.log]
+                                            }];
+                                        }
+                                        return prev.map(action =>
+                                            action.key === payload.actionKey
+                                                ? { ...action, detailLogs: [...action.detailLogs, payload.log] }
+                                                : action
+                                        );
+                                    });
+                                    break;
+                                case 'state':
+                                    setGraphState(prev => ({ ...prev, ...payload }));
+                                    break;
+                                case 'control':
+                                    if (payload.status === 'finished') {
+                                        setIsRunning(false);
+                                        setActiveNode(null);
                                     }
-                                    return prev.map(action =>
-                                        action.key === payload.actionKey
-                                            ? { ...action, detailLogs: [...action.detailLogs, payload.log] }
-                                            : action
-                                    );
-                                });
-                                break;
-                            case 'state':
-                                setGraphState(prev => ({ ...prev, ...payload }));
-                                break;
-                            case 'control':
-                                if (payload.status === 'finished') {
-                                    setIsRunning(false);
-                                    setActiveNode(null);
-                                }
-                                break;
-                            default:
-                                console.warn("Unknown event type:", type);
+                                    break;
+                                default:
+                                    console.warn("Unknown event type:", type);
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse SSE data:", jsonStr, e);
                         }
-                    } catch (e) {
-                        console.error("Failed to parse SSE data:", jsonStr, e);
                     }
                 }
             }
         }
-    }
-    if (finalState) {
-        setGraphState(finalState);
-    }
-};
-
-const handleApplyFix = useCallback(async (patch: string) => {
-    try {
-        const response = await fetch('http://127.0.0.1:8080/api/apply-fix', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ patch, graph_state: graphState }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to apply fix');
+        if (finalState) {
+            setGraphState(finalState);
         }
-        const newState = await response.json();
-        setGraphState(newState);
-        setAppliedFixes(prev => [...prev, patch]);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        setScanError(`Apply fix failed: ${errorMessage}`);
-    }
-}, [graphState]);
+    };
 
-const handleRunDast = useCallback(async () => {
-    try {
-        const response = await fetch('http://127.0.0.1:8080/api/continue-scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ graph_state: graphState }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to start DAST scan');
+    const handleStartScan = useCallback(async (file: File | null) => {
+        if (!file) {
+            setScanError("No file selected.");
+            return;
         }
+        resetState();
+        setIsRunning(true);
+        setActionLogs(prev => [...prev, {
+            key: 'file_upload',
+            title: 'Uploading and Verifying File',
+            status: 'active',
+            detailLogs: [{ message: `Uploading ${file.name}...`, type: 'info', timestamp: (Date.now() / 1000).toString() }]
+        }]);
 
-        await handleSseStream(response);
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        setScanError(`DAST scan failed to start: ${errorMessage}`);
-    }
-}, [graphState]);
+        try {
+            const base64File = await fileToBase64(file);
+            const response = await fetch('/start_full_scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zip_file_base64: base64File }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                const errorMessage = errorData.error || `HTTP error! status: ${response.status}`;
+                setScanError(errorMessage);
+                setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Upload failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
+                setIsRunning(false);
+                return;
+            }
+
+            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'success', detailLogs: [...a.detailLogs, { message: 'File uploaded and verified.', type: 'success', timestamp: (Date.now() / 1000).toString() }] } : a));
+
+            await handleSseStream(response);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setScanError(errorMessage);
+            setActionLogs(prev => prev.map(a => a.key === 'file_upload' ? { ...a, status: 'failure', detailLogs: [...a.detailLogs, { message: `Scan failed: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }] } : a));
+            setIsRunning(false);
+        }
+    }, [resetState]);
+
+    const handleApplyFix = useCallback(async (patch: string) => {
+        try {
+            const response = await fetch('/apply_fix_and_update_state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ patch, current_graph_state: graphState }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to apply fix');
+            }
+            const newState = await response.json();
+            setGraphState(newState);
+            setAppliedFixes(prev => [...prev, patch]);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setScanError(`Apply fix failed: ${errorMessage}`);
+        }
+    }, [graphState]);
+
+    const handleRunDast = useCallback(async () => {
+        try {
+            const response = await fetch('/continue_scan_with_dast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_graph_state: graphState }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to start DAST scan');
+            }
+
+            await handleSseStream(response);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setScanError(`DAST scan failed to start: ${errorMessage}`);
+        }
+    }, [graphState]);
 
     const hasReport = !isRunning && graphState.final_report;
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;

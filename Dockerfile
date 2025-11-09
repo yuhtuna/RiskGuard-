@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # --- Stage 2: Final Production Image ---
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Set the working directory
 WORKDIR /app

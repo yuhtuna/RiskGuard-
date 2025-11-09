@@ -14,7 +14,7 @@ The application is composed of two main parts:
 Before you begin, ensure you have the following installed:
 
 *   **Node.js** (v18 or later)
-*   **Python** (v3.10 or later)
+*   **Python** (v3.12 or later)
 *   **pip** (Python package installer)
 *   **Google Cloud SDK** (`gcloud` CLI)
 *   **A Secure Cloud Run Job for DAST:** You must have a separate, secure Cloud Run Job deployed to execute DAST attacks.
@@ -49,6 +49,7 @@ You will also need a Google Cloud Storage (GCS) bucket to temporarily store the 
     ```bash
     pip install -r requirements.txt
     ```
+    **Note:** The `requirements.txt` file contains pinned versions of all dependencies. This ensures that the application is built with the exact same libraries every time, which leads to faster and more reliable deployments, especially on Google Cloud Run.
 
 4.  **Authenticate with Google Cloud:**
     ```bash
