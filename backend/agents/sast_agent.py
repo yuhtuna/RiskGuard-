@@ -1,44 +1,50 @@
 import os
 import json
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.schema.output_parser import StrOutputParser
-
 from tools.sast_tools import read_source_code
 
 def run_sast_scan(local_repo_path: str) -> dict:
     """
-    Runs a generative AI-powered SAST scan on the local repository.
+    Runs a simulated SAST scan on the local repository.
+
+    Args:
+        local_repo_path: The path to the local repository.
+
+    Returns:
+        A dictionary representing the SAST report.
     """
-    files_to_scan = ['app.py', 'main.py', 'index.js', 'package.json', 'requirements.txt']
+    # In a real application, this would involve a more sophisticated analysis
+    # of the source code, likely using a generative AI model.
+    # For this example, we'll just read a few key files and generate a mock report.
+
+    files_to_scan = ['app.py', 'main.py', 'requirements.txt', 'package.json']
     code_snippets = []
     for file_name in files_to_scan:
         file_path = os.path.join(local_repo_path, file_name)
         try:
             content = read_source_code(file_path)
-            code_snippets.append(f"--- {file_name} ---\n{content}\n---\n")
+            code_snippets.append({'file': file_name, 'content': content})
         except FileNotFoundError:
             pass
 
-    if not code_snippets:
-        return {"vulnerabilities": [], "summary": "No scannable files found."}
+    # Mock SAST report
+    sast_report = {
+        'vulnerabilities': [
+            {
+                'file': 'main.py',
+                'line': 42,
+                'type': 'SQL Injection',
+                'severity': 'High',
+                'description': 'A potential SQL injection vulnerability was found in a database query.'
+            },
+            {
+                'file': 'app.py',
+                'line': 88,
+                'type': 'Hardcoded Secret',
+                'severity': 'Medium',
+                'description': 'A hardcoded API key was found in the source code.'
+            }
+        ],
+        'summary': 'Found 2 potential vulnerabilities.'
+    }
 
-    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
-    prompt = PromptTemplate.from_template("""
-Analyze the following code snippets for potential security vulnerabilities.
-For each vulnerability found, provide the file name, line number, vulnerability type, severity (High, Medium, Low), and a brief description.
-
-Code snippets:
-{code}
-
-Return the report in a valid JSON format.
-""")
-
-    chain = prompt | llm | StrOutputParser()
-
-    response = chain.invoke({"code": "\n".join(code_snippets)})
-
-    try:
-        return json.loads(response.replace("```json", "").replace("```", ""))
-    except json.JSONDecodeError:
-        return {"vulnerabilities": [], "summary": "Failed to parse SAST report."}
+    return sast_report

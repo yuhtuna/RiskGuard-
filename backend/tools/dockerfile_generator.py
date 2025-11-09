@@ -1,7 +1,5 @@
 import os
-from google.adk.tools import tool
 
-@tool
 def generate_dockerfile(project_path):
     """
     Analyzes a project directory and generates a suitable Dockerfile if one doesn't exist.

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { FinalReport, SastFinding, DastFinding, SuggestedFix, HASTGraphState } from '../types';
+import type { FinalReport, SastFinding, DastFinding, SuggestedFix } from '../types';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
@@ -19,7 +19,7 @@ const FixBlock: React.FC<{ fix: SuggestedFix; onApplyFix: (patch: string) => voi
                     </svg>
                 </div>
                 <div className="flex-grow font-sans text-sm font-semibold text-blue-600 dark:text-blue-400">
-                    {fix.description}
+                    Suggested Fix for {fix.file_path}
                 </div>
                 <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -108,53 +108,22 @@ interface ResultPanelProps {
     onRunDast?: () => void;
     appliedFixes?: string[];
     isModalView?: boolean;
-    graphState?: Partial<HASTGraphState>;
 }
 
-const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false, graphState }) => {
-    const handleDownload = async () => {
-        if (!graphState) return;
-        try {
-            const response = await fetch('/download_fixed_code', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ current_graph_state: graphState }),
-            });
-            if (!response.ok) throw new Error('Download failed');
-            const { data } = await response.json();
-            const byteCharacters = atob(data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'fixed_source.zip';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error('Download error:', error);
-        }
-    };
-
+const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false }) => {
     if (fixes && onApplyFix && onRunDast && appliedFixes) {
         return (
             <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 h-full flex flex-col">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
                     <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Suggested Fixes</h2>
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleDownload}
+                        <a 
+                            href="/api/download-fixed-code"
+                            download
                             className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-3 rounded-md text-sm"
                         >
                             Download Code
-                        </button>
+                        </a>
                         <button 
                             onClick={onRunDast}
                             className="bg-green-600 hover:bg-green-500 text-white font-bold py-1 px-3 rounded-md text-sm"
