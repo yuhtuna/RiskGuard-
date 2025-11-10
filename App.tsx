@@ -241,8 +241,63 @@ const App: React.FC = () => {
         }
     }, [graphState]);
 
+    const handleRegenerateFixes = useCallback(async () => {
+        try {
+            const response = await fetch('http://127.0.0.1:8080/api/regenerate-fixes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ graph_state: graphState }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to regenerate fixes');
+            }
+
+            await handleSseStream(response);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setScanError(`Failed to regenerate fixes: ${errorMessage}`);
+        }
+    }, [graphState]);
+
+    const handleFinish = useCallback(async () => {
+        try {
+            const downloadResponse = await fetch('http://127.0.0.1:8080/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ graph_state: graphState }),
+            });
+
+            if (!downloadResponse.ok) {
+                const errorData = await downloadResponse.json();
+                throw new Error(errorData.error || 'Failed to download fixed code');
+            }
+
+            const downloadData = await downloadResponse.json();
+            const a = document.createElement('a');
+            a.href = `data:application/zip;base64,${downloadData.data}`;
+            a.download = 'fixed_source.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            await fetch('http://127.0.0.1:8080/api/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ graph_state: graphState }),
+            });
+
+            resetState();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setScanError(`Finish process failed: ${errorMessage}`);
+        }
+    }, [graphState, resetState]);
+
     const hasReport = !isRunning && graphState.final_report;
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
+    const dastReport = graphState.dast_report || { vulnerabilities: [] };
+    const exploitSucceeded = dastReport.vulnerabilities.some((v: any) => v.status === 'SUCCESS');
 
     return (
         <div className="h-screen bg-slate-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
@@ -271,6 +326,9 @@ const App: React.FC = () => {
                                 onRunDast={handleRunDast}
                                 appliedFixes={appliedFixes}
                                 graphState={graphState}
+                                onRegenerateFixes={handleRegenerateFixes}
+                                onFinish={handleFinish}
+                                exploitSucceeded={exploitSucceeded}
                             />
                         </div>
                     )}
