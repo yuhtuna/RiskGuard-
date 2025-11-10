@@ -76,13 +76,13 @@ const VulnerabilityFindingBlock: React.FC<{ sast: SastFinding; dast?: DastFindin
             </button>
             <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-96' : 'max-h-0'}`}>
                 <div className="border-t border-slate-200 dark:border-gray-700/50 p-3 mt-1 ml-4 pl-5 border-l text-sm">
-                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">SAST Discovery</div>
+                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Static Code Analysis Discovery</div>
                     <div className="flex items-center gap-3 mb-1 text-gray-600 dark:text-gray-400">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                         <span>{sast.file}:{sast.line}</span>
                     </div>
                     
-                    <div className="font-semibold text-gray-700 dark:text-gray-300 mt-4 mb-2">DAST Confirmation</div>
+                    <div className="font-semibold text-gray-700 dark:text-gray-300 mt-4 mb-2">Dynamic Exploit Testing Confirmation</div>
                     {isConfirmed ? (
                         <div className="flex items-center gap-3 text-green-600 dark:text-green-400">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
@@ -116,14 +116,14 @@ interface ResultPanelProps {
 
 const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false, graphState, onRegenerateFixes, onFinish, exploitSucceeded }) => {
     if (fixes && onApplyFix && onRunDast && appliedFixes && onRegenerateFixes && onFinish) {
-        // Determine if DAST has been run
+        // Determine if Dynamic Exploit Testing has been run
         const hasDastResults = graphState?.dast_report !== undefined && graphState?.dast_report !== null;
         
         // Determine which action button to show
         let actionButton = null;
         if (hasDastResults) {
             if (exploitSucceeded) {
-                // DAST ran and exploit succeeded = fix FAILED, need to regenerate
+                // Dynamic Exploit Testing ran and exploit succeeded = fix FAILED, need to regenerate
                 actionButton = (
                     <button
                         onClick={onRegenerateFixes}
@@ -133,7 +133,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApp
                     </button>
                 );
             } else {
-                // DAST ran and exploit FAILED = fix WORKED, can finish
+                // Dynamic Exploit Testing ran and exploit FAILED = fix WORKED, can finish
                 actionButton = (
                     <button
                         onClick={onFinish}
@@ -152,12 +152,12 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApp
                     <div className="flex items-center gap-2">
                         {actionButton}
                         {!hasDastResults && (
-                            // DAST hasn't run yet, show the Run DAST button
+                            // Dynamic Exploit Testing hasn't run yet, show the Run Dynamic Exploit Testing button
                             <button 
                                 onClick={onRunDast}
                                 className="bg-green-600 hover:bg-green-500 text-white font-bold py-1 px-3 rounded-md text-sm"
                             >
-                                🚀 Run DAST
+                                🚀 Run Dynamic Exploit Testing
                             </button>
                         )}
                     </div>

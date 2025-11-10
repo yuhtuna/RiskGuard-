@@ -5,7 +5,7 @@ import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import StatePanel from './components/StatePanel';
 import LogPanel from './components/LogPanel';
-import WorkflowDiagram from './components/WorkflowDiagram';
+import WorkflowStepper from './components/WorkflowStepper';
 import ResultPanel from './components/ResultPanel';
 import FinalReportModal from './components/FinalReportModal';
 import Welcome from './components/Welcome';
@@ -51,9 +51,9 @@ const HomePage: React.FC = () => {
 
     const actionMap = {
         'deploy_sandbox': 'Deploy Sandbox Environment',
-        'sast_scan': 'Run SAST Scan on Source Code',
-        'plan_attack': 'Generate DAST Attack Plan',
-        'run_dast': 'Execute DAST Exploits',
+        'sast_scan': 'Run Static Code Analysis on Source Code',
+        'plan_attack': 'Generate Dynamic Exploit Testing Attack Plan',
+        'run_dast': 'Execute Dynamic Exploit Testing Exploits',
         'destroy_sandbox': 'Destroy Sandbox Environment'
     };
 
@@ -191,13 +191,13 @@ const HomePage: React.FC = () => {
             });
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to start DAST scan');
+                throw new Error(errorData.error || 'Failed to start Dynamic Exploit Testing scan');
             }
 
             await handleSseStream(response);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            dispatch({ type: 'SET_SCAN_ERROR', payload: `DAST scan failed to start: ${errorMessage}` });
+            dispatch({ type: 'SET_SCAN_ERROR', payload: `Dynamic Exploit Testing scan failed to start: ${errorMessage}` });
         }
     }, [graphState, handleSseStream]);
 
@@ -257,18 +257,18 @@ const HomePage: React.FC = () => {
     const dastReport = graphState.dast_report;
     const exploitSucceeded = dastReport?.vulnerabilities?.some((v) => v.status === 'SUCCESS') || false;
 
-    // Show final report only if DAST completed successfully (exploit failed = fix worked)
+    // Show final report only if Dynamic Exploit Testing completed successfully (exploit failed = fix worked)
     const hasReport = !isRunning && graphState.final_report && dastReport && !exploitSucceeded;
 
     // Show fixes panel if we have fixes AND either:
-    // 1. No DAST report yet (before running DAST)
-    // 2. DAST found vulnerabilities (exploit succeeded = need to regenerate)
+    // 1. No Dynamic Exploit Testing report yet (before running Dynamic Exploit Testing)
+    // 2. Dynamic Exploit Testing found vulnerabilities (exploit succeeded = need to regenerate)
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
 
     return (
-        <div className="h-screen bg-slate-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
+        <div className="h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
             <Header theme={theme} onToggleTheme={toggleTheme} />
-            <main className="flex-grow p-4 lg:p-6 flex flex-col gap-4 lg:gap-6">
+            <main className="flex-grow p-4 lg:p-6 flex flex-col gap-6">
                 {!isRunning && !graphState.source_code_url && (
                     <Welcome />
                 )}
@@ -278,15 +278,11 @@ const HomePage: React.FC = () => {
                     scanError={scanError}
                 />
                 {(isRunning || graphState.source_code_url) && (
-                    <>
-                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
-                            <div className="xl:col-span-2 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex justify-center">
-                                <WorkflowDiagram nodeStatuses={nodeStatuses} activeNode={activeNode} />
-                            </div>
-                            <div className="flex flex-col gap-4 lg:gap-6">
-                                <StatePanel graphState={graphState} />
-                                <LogPanel actions={actionLogs} />
-                            </div>
+                    <div className="space-y-6">
+                        <WorkflowStepper nodeStatuses={nodeStatuses} activeNode={activeNode} />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <StatePanel graphState={graphState} />
+                            <LogPanel actions={actionLogs} />
                         </div>
                         {showFixes && (
                             <ResultPanel
@@ -303,7 +299,7 @@ const HomePage: React.FC = () => {
                         {hasReport && graphState.final_report && (
                             <ResultPanel report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
                         )}
-                    </>
+                    </div>
                 )}
             </main>
             {isModalOpen && hasReport && graphState.final_report && (

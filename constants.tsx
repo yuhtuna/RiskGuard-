@@ -12,7 +12,7 @@ export const WORKFLOW_NODES = {
         position: { top: '2%', left: '50%' },
     },
     sast_scan: {
-        label: "SAST Scan",
+        label: "Static Code Analysis",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z" /></svg>),
         position: { top: '26%', left: '50%' },
     },
@@ -22,7 +22,7 @@ export const WORKFLOW_NODES = {
         position: { top: '50%', left: '50%' },
     },
     run_dast: {
-        label: "Run DAST",
+        label: "Run Dynamic Exploit Testing",
         icon: (<svg {...iconProps} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>),
         position: { top: '74%', left: '50%' },
     },
