@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { ActionLog, LogEntry, NodeStatus } from '../../../types';
+import type { ActionLog, LogEntry, NodeStatus } from '../../types';
 
 // SVG Icon component for visual representation
 const Icon: React.FC<{ path: string; className?: string }> = ({ path, className }) => (

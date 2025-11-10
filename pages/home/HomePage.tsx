@@ -5,7 +5,6 @@ import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import ScanProgress from './components/ScanProgress';
 import ActivityLog from './components/ActivityLog';
-import WorkflowStepper from './components/WorkflowStepper';
 import VulnerabilityReport from './components/VulnerabilityReport';
 import FinalReportModal from './components/FinalReportModal';
 import Welcome from './components/Welcome';
@@ -279,7 +278,6 @@ const HomePage: React.FC = () => {
                 />
                 {(isRunning || graphState.source_code_url) && (
                     <div className="space-y-6">
-                        <WorkflowStepper nodeStatuses={nodeStatuses} activeNode={activeNode} />
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <ScanProgress graphState={graphState} />
                             <ActivityLog logs={actionLogs} />
