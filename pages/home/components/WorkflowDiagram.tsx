@@ -2,8 +2,8 @@ import React, { useRef, useState, useLayoutEffect, useCallback } from 'react';
 import WorkflowNode from './WorkflowNode';
 import WorkflowEdge from './WorkflowEdge';
 import DiagramControls from './DiagramControls';
-import { WORKFLOW_NODES, WORKFLOW_EDGES } from '../constants';
-import type { NodeStatus, NodeKey, EdgeStatus } from '../types';
+import { WORKFLOW_NODES, WORKFLOW_EDGES } from '../../../constants';
+import type { NodeStatus, NodeKey, EdgeStatus } from '../../../types';
 
 interface WorkflowDiagramProps {
     nodeStatuses: Record<NodeKey, NodeStatus>;
