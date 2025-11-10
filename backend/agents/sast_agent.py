@@ -5,31 +5,43 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from tools.sast_tools import read_source_code
+from tools.smart_file_analyzer import select_files_for_scanning
 
 def run_sast_scan(local_repo_path: str) -> dict:
     """
     Runs a generative AI-powered SAST scan on the local repository.
+    Uses smart file selection to prioritize high-risk files.
     """
-    # Scan all code files in the repository
-    code_extensions = ['.py', '.js', '.ts', '.java', '.php', '.go', '.rb', '.cs', '.cpp', '.c', '.jsx', '.tsx']
-    code_snippets = []
+    print("[SAST Agent] Starting smart file selection...")
     
-    for root, dirs, files in os.walk(local_repo_path):
-        # Skip common non-code directories
-        dirs[:] = [d for d in dirs if d not in ['node_modules', 'venv', '.git', '__pycache__', 'dist', 'build']]
-        
-        for file in files:
-            if any(file.endswith(ext) for ext in code_extensions):
-                file_path = os.path.join(root, file)
-                try:
-                    content = read_source_code(file_path)
-                    relative_path = os.path.relpath(file_path, local_repo_path)
-                    code_snippets.append(f"--- {relative_path} ---\n{content}\n---\n")
-                except (FileNotFoundError, UnicodeDecodeError, PermissionError):
-                    pass
+    # Intelligently select the most important files to scan
+    selected_files = select_files_for_scanning(
+        local_repo_path,
+        max_files=20,  # Limit to top 20 files
+        max_total_size_kb=500  # Max 500KB total
+    )
+    
+    if not selected_files:
+        print("[SAST Agent] No scannable files found")
+        return {"vulnerabilities": [], "summary": "No scannable files found."}
+    
+    print(f"[SAST Agent] Selected {len(selected_files)} high-priority files for scanning:")
+    for f in selected_files[:5]:  # Show top 5
+        print(f"  - {f['relative_path']} (priority: {f['priority']}, size: {f['size_kb']:.1f}KB)")
+    if len(selected_files) > 5:
+        print(f"  ... and {len(selected_files) - 5} more files")
+    
+    # Read selected files
+    code_snippets = []
+    for file_info in selected_files:
+        try:
+            content = read_source_code(file_info['path'])
+            code_snippets.append(f"--- {file_info['relative_path']} (Priority: {file_info['priority']}) ---\n{content}\n---\n")
+        except (FileNotFoundError, UnicodeDecodeError, PermissionError):
+            pass
 
     if not code_snippets:
-        return {"vulnerabilities": [], "summary": "No scannable files found."}
+        return {"vulnerabilities": [], "summary": "Could not read any files."}
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.2)
     prompt = PromptTemplate.from_template("""

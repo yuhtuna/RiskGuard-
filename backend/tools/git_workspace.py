@@ -74,20 +74,53 @@ def git_apply_patch(patch_string: str, local_repo_path: str):
         f.write(patch_string)
 
     try:
-        # Use git apply with --reject to handle potential conflicts
+        # Try git apply with --3way first (better at handling conflicts)
         def apply_patch():
-            repo.git.apply('--reject', patch_file_path)
+            try:
+                # Try 3-way merge first - best for handling conflicts
+                repo.git.apply('--3way', patch_file_path)
+                return "applied_cleanly"
+            except GitCommandError:
+                # If 3-way fails, try with --reject to apply what we can
+                try:
+                    repo.git.apply('--reject', patch_file_path)
+                    return "applied_with_rejects"
+                except GitCommandError as e:
+                    # Both failed, raise with details
+                    raise e
         
         try:
-            _retry_with_delay(apply_patch)
+            result = _retry_with_delay(apply_patch)
+            if result == "applied_with_rejects":
+                # Patch partially applied - check for .rej files
+                rej_files = []
+                for root, dirs, files in os.walk(local_repo_path):
+                    for file in files:
+                        if file.endswith('.rej'):
+                            rej_files.append(os.path.relpath(os.path.join(root, file), local_repo_path))
+                
+                if rej_files:
+                    raise RuntimeError(f"Patch partially applied. Some changes could not be applied automatically. Rejected hunks in: {', '.join(rej_files)}. The AI-generated fix may not match the exact code structure. Try regenerating fixes or apply the changes manually.")
         except GitCommandError as e:
-            # surface a clearer error
-            raise RuntimeError(f"git apply failed: {e}")
+            # Extract meaningful error from git stderr
+            error_msg = str(e)
+            if "patch does not apply" in error_msg.lower():
+                raise RuntimeError(f"Patch does not match the current code structure. The AI-generated fix expects different code. Try regenerating fixes. Details: {error_msg}")
+            else:
+                raise RuntimeError(f"Failed to apply patch: {error_msg}")
     finally:
-        # Clean up the patch file
+        # Clean up the patch file and any .rej files
         def cleanup_patch():
             if os.path.exists(patch_file_path):
                 os.remove(patch_file_path)
+            # Also clean up .rej files
+            for root, dirs, files in os.walk(local_repo_path):
+                for file in files:
+                    if file.endswith('.rej') or file.endswith('.orig'):
+                        try:
+                            os.remove(os.path.join(root, file))
+                        except Exception:
+                            pass
         
         try:
             _retry_with_delay(cleanup_patch)

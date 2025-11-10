@@ -42,7 +42,7 @@ export interface HASTGraphState {
     sast_report: SastFinding[];
     suggested_fixes: SuggestedFix[];
     attack_plan: { target_url: string; vulnerability_type: string; payload: string }[];
-    dast_report: DastFinding[];
+    dast_report: { vulnerabilities: DastFinding[]; summary: string };
     final_report: FinalReport;
 }
 

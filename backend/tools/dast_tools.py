@@ -78,13 +78,25 @@ def _execute_local_exploit(attack_step: dict) -> dict:
     # If no target URL or it's pointing to localhost that doesn't exist, simulate result
     if not target_url or 'localhost' in target_url or '127.0.0.1' in target_url:
         print(f"[DAST Local] Target is localhost/missing - simulating test for {vuln_type}")
-        # Simulate a test result based on vulnerability type
-        return {
-            'status': 'FAILURE',
-            'proof_of_exploit': None,
-            'vulnerability_type': vuln_type,
-            'message': f'Local testing mode: Cannot test against {target_url or "missing URL"}. Deploy to Cloud Run for full DAST testing.'
-        }
+        
+        # Check if we should simulate a successful exploit for testing
+        # This allows testing the "Regenerate Fixes" workflow in local mode
+        simulate_success = os.environ.get('SIMULATE_DAST_SUCCESS', 'false').lower() == 'true'
+        
+        if simulate_success:
+            return {
+                'status': 'SUCCESS',
+                'proof_of_exploit': f'[SIMULATED] Successfully exploited {vuln_type} in local testing mode',
+                'vulnerability_type': vuln_type,
+                'message': f'Local testing mode: Simulated successful exploit for workflow testing.'
+            }
+        else:
+            return {
+                'status': 'FAILURE',
+                'proof_of_exploit': None,
+                'vulnerability_type': vuln_type,
+                'message': f'Local testing mode: Cannot test against {target_url or "missing URL"}. Deploy to Cloud Run for full DAST testing.'
+            }
     
     # Try to make the actual HTTP request
     try:

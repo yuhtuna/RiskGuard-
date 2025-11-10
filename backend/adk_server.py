@@ -16,7 +16,7 @@ from flask_cors import CORS, cross_origin
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from agents.planning_agent import create_attack_plan
-from agents.fixer_agent import generate_fixes
+from agents.fixer_agent import generate_fixes, generate_fixes_with_fallback
 from agents.sast_agent import run_sast_scan
 from agents.dast_agent import run_dast_scan
 from tools.environment_manager import deploy_to_sandbox, destroy_sandbox
@@ -177,12 +177,38 @@ def apply_fix() -> Dict[str, Any]:
 def continue_scan() -> Response:
     """
     Continues the scan with DAST and then cleans up the environment.
+    Re-deploys the patched code to a NEW sandbox before running DAST attacks.
     """
     data = request.get_json()
     current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
 
     def generate_dast_events():
+        # Re-deploy the patched code to test if fixes work
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Re-deploying patched code to new sandbox for DAST testing...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        
+        if SKIP_GCP_DEPLOYMENT:
+            # Skip GCP deployment - use localhost for testing
+            service_url = "http://localhost:8000"
+            service_name = "local-testing-patched"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': f'Using local URL: {service_url}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        else:
+            # Deploy the patched code to a new sandbox
+            service_url = None
+            service_name = None
+            for item in deploy_to_sandbox(scan_state["local_repo_path"], GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME):
+                if isinstance(item, tuple) and len(item) == 2:
+                    service_url, service_name = item
+                else:
+                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        
+        # Update the sandbox URL to the newly deployed patched version
+        scan_state["sandbox_url"] = service_url
+        scan_state["service_name"] = service_name
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
+        
         # Plan Attack
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
         attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
@@ -262,17 +288,36 @@ def download_fixed_code() -> Any:
 @cross_origin()
 def regenerate_fixes_endpoint() -> Response:
     """
-    Regenerates fixes based on the current SAST report.
+    Regenerates fixes based on the current SAST report and DAST results.
+    Uses enhanced fix generation that learns from DAST failures.
+    Called when the previous fix failed (DAST exploit succeeded).
     """
     data = request.get_json()
     current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
 
     def generate_fixes_events():
-        # Regenerate Fixes
-        fixes = generate_fixes(scan_state["sast_report"], scan_state["local_repo_path"])
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Previous fix failed. Analyzing DAST results and generating improved fixes...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        
+        # Use enhanced fix generation with DAST feedback
+        dast_report = scan_state.get("dast_report")
+        if dast_report:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Using DAST feedback to generate more robust fixes', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            fixes = generate_fixes_with_fallback(
+                scan_state["sast_report"], 
+                scan_state["local_repo_path"],
+                dast_report
+            )
+        else:
+            fixes = generate_fixes(scan_state["sast_report"], scan_state["local_repo_path"])
+        
         scan_state["suggested_fixes"] = fixes
-        yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
+        
+        # Clear the old DAST report since we're going to try new fixes
+        scan_state["dast_report"] = None
+        
+        yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes, 'dast_report': None}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': f'Generated {len(fixes)} enhanced fix suggestions', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
 
     return Response(generate_fixes_events(), mimetype='text/event-stream')

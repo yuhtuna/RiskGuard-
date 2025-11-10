@@ -116,32 +116,50 @@ interface ResultPanelProps {
 
 const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false, graphState, onRegenerateFixes, onFinish, exploitSucceeded }) => {
     if (fixes && onApplyFix && onRunDast && appliedFixes && onRegenerateFixes && onFinish) {
+        // Determine if DAST has been run
+        const hasDastResults = graphState?.dast_report !== undefined && graphState?.dast_report !== null;
+        
+        // Determine which action button to show
+        let actionButton = null;
+        if (hasDastResults) {
+            if (exploitSucceeded) {
+                // DAST ran and exploit succeeded = fix FAILED, need to regenerate
+                actionButton = (
+                    <button
+                        onClick={onRegenerateFixes}
+                        className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-1 px-3 rounded-md text-sm"
+                    >
+                        🔄 Regenerate Fixes
+                    </button>
+                );
+            } else {
+                // DAST ran and exploit FAILED = fix WORKED, can finish
+                actionButton = (
+                    <button
+                        onClick={onFinish}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded-md text-sm"
+                    >
+                        ✅ Finish & Download
+                    </button>
+                );
+            }
+        }
+        
         return (
             <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 h-full flex flex-col">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
                     <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Suggested Fixes</h2>
                     <div className="flex items-center gap-2">
-                        {exploitSucceeded ? (
-                            <button
-                                onClick={onRegenerateFixes}
-                                className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-1 px-3 rounded-md text-sm"
+                        {actionButton}
+                        {!hasDastResults && (
+                            // DAST hasn't run yet, show the Run DAST button
+                            <button 
+                                onClick={onRunDast}
+                                className="bg-green-600 hover:bg-green-500 text-white font-bold py-1 px-3 rounded-md text-sm"
                             >
-                                Regenerate Fixes
-                            </button>
-                        ) : (
-                            <button
-                                onClick={onFinish}
-                                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded-md text-sm"
-                            >
-                                Finish & Download
+                                🚀 Run DAST
                             </button>
                         )}
-                        <button 
-                            onClick={onRunDast}
-                            className="bg-green-600 hover:bg-green-500 text-white font-bold py-1 px-3 rounded-md text-sm"
-                        >
-                            Run DAST
-                        </button>
                     </div>
                 </div>
                 <div className="flex-grow overflow-y-auto bg-slate-100 dark:bg-black rounded-md p-2 flex flex-col gap-1.5">

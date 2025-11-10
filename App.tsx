@@ -280,7 +280,7 @@ const App: React.FC = () => {
             a.download = 'fixed_source.zip';
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            a.remove();
 
             await fetch('http://127.0.0.1:8080/api/finish', {
                 method: 'POST',
@@ -295,10 +295,16 @@ const App: React.FC = () => {
         }
     }, [graphState, resetState]);
 
-    const hasReport = !isRunning && graphState.final_report;
+    const dastReport = graphState.dast_report;
+    const exploitSucceeded = dastReport?.vulnerabilities?.some((v) => v.status === 'SUCCESS') || false;
+    
+    // Show final report only if DAST completed successfully (exploit failed = fix worked)
+    const hasReport = !isRunning && graphState.final_report && dastReport && !exploitSucceeded;
+    
+    // Show fixes panel if we have fixes AND either:
+    // 1. No DAST report yet (before running DAST)
+    // 2. DAST found vulnerabilities (exploit succeeded = need to regenerate)
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
-    const dastReport = graphState.dast_report || { vulnerabilities: [] };
-    const exploitSucceeded = dastReport.vulnerabilities.some((v: any) => v.status === 'SUCCESS');
 
     return (
         <div className="h-screen bg-slate-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
@@ -333,15 +339,15 @@ const App: React.FC = () => {
                             />
                         </div>
                     )}
-                    {hasReport && (
+                    {hasReport && graphState.final_report && (
                         <div className="grow basis-0 min-h-0">
-                            <ResultPanel report={graphState.final_report!} onClick={() => setIsModalOpen(true)} />
+                            <ResultPanel report={graphState.final_report} onClick={() => setIsModalOpen(true)} />
                         </div>
                     )}
                 </div>
             </main>
-            {isModalOpen && hasReport && (
-                 <FinalReportModal report={graphState.final_report!} onClose={() => setIsModalOpen(false)} />
+            {isModalOpen && hasReport && graphState.final_report && (
+                 <FinalReportModal report={graphState.final_report} onClose={() => setIsModalOpen(false)} />
             )}
         </div>
     );
