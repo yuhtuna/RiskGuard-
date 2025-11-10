@@ -1,6 +1,6 @@
 import React from 'react';
 import type { FinalReport } from '../types';
-import ResultPanel from './ResultPanel'; // Re-use the inner content logic
+import VulnerabilityReport from './VulnerabilityReport'; // Re-use the inner content logic
 
 interface FinalReportModalProps {
     report: FinalReport;
@@ -34,8 +34,8 @@ const FinalReportModal: React.FC<FinalReportModalProps> = ({ report, onClose }) 
                     </button>
                 </header>
                 <main className="flex-grow p-2 overflow-y-auto">
-                   {/* We can re-use the ResultPanel component here for consistency, but without the outer shell */}
-                   <ResultPanel report={report} isModalView />
+                   {/* We can re-use the VulnerabilityReport component here for consistency, but without the outer shell */}
+                   <VulnerabilityReport report={report} isModalView />
                 </main>
             </div>
         </div>

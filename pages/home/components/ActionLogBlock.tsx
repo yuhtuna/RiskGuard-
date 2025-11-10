@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
-import type { ActionLog, LogEntry, NodeStatus } from '../types';
+import type { ActionLog, LogEntry, NodeStatus } from '../../../types';
+
+// SVG Icon component for visual representation
+const Icon: React.FC<{ path: string; className?: string }> = ({ path, className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${className}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+    </svg>
+);
 
 const LogDetailLine: React.FC<{ log: LogEntry }> = ({ log }) => {
     const iconMap: Record<LogEntry['type'], React.ReactNode> = {
-        info: <span className="text-gray-400 dark:text-gray-500 font-mono">&gt;</span>,
-        success: <span className="text-green-500 font-bold">✓</span>,
-        failure: <span className="text-red-500 font-bold">✗</span>,
-        agent: <span className="text-sky-500">●</span>,
+        info: <Icon path="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="text-gray-400 dark:text-gray-500" />,
+        success: <Icon path="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" className="text-green-500" />,
+        failure: <Icon path="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" className="text-red-500" />,
+        agent: <Icon path="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" className="text-sky-500" />,
     };
 
     const colorMap: Record<LogEntry['type'], string> = {
@@ -16,8 +23,15 @@ const LogDetailLine: React.FC<{ log: LogEntry }> = ({ log }) => {
         agent: 'text-sky-600 dark:text-sky-300',
     };
 
+    const bgClassMap: Record<LogEntry['type'], string> = {
+        info: 'bg-gray-100/50 dark:bg-gray-800/20',
+        success: 'bg-green-100/50 dark:bg-green-800/20',
+        failure: 'bg-red-100/50 dark:bg-red-800/20',
+        agent: 'bg-sky-100/50 dark:bg-sky-800/20',
+    };
+
     return (
-        <div className={`flex items-start gap-3 text-sm ${colorMap[log.type]}`}>
+        <div className={`flex items-start gap-3 text-sm p-2 rounded-md ${colorMap[log.type]} ${bgClassMap[log.type]}`}>
             <div className="flex-shrink-0 pt-0.5">{iconMap[log.type]}</div>
             <div className="flex-grow break-words min-w-0">{log.message}</div>
             <div className="flex-shrink-0 text-gray-400 dark:text-gray-500 text-xs pt-0.5 ml-2">

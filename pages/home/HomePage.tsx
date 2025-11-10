@@ -3,10 +3,10 @@ import type { HASTGraphState, NodeStatus, NodeKey, Theme, ActionLog } from '../.
 import { WORKFLOW_NODES } from '../../constants';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
-import StatePanel from './components/StatePanel';
-import LogPanel from './components/LogPanel';
+import ScanProgress from './components/ScanProgress';
+import ActivityLog from './components/ActivityLog';
 import WorkflowStepper from './components/WorkflowStepper';
-import ResultPanel from './components/ResultPanel';
+import VulnerabilityReport from './components/VulnerabilityReport';
 import FinalReportModal from './components/FinalReportModal';
 import Welcome from './components/Welcome';
 import { initialState, reducer } from './state';
@@ -281,11 +281,11 @@ const HomePage: React.FC = () => {
                     <div className="space-y-6">
                         <WorkflowStepper nodeStatuses={nodeStatuses} activeNode={activeNode} />
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <StatePanel graphState={graphState} />
-                            <LogPanel actions={actionLogs} />
+                            <ScanProgress graphState={graphState} />
+                            <ActivityLog logs={actionLogs} />
                         </div>
                         {showFixes && (
-                            <ResultPanel
+                            <VulnerabilityReport
                                 fixes={graphState.suggested_fixes}
                                 onApplyFix={handleApplyFix}
                                 onRunDast={handleRunDast}
@@ -297,7 +297,7 @@ const HomePage: React.FC = () => {
                             />
                         )}
                         {hasReport && graphState.final_report && (
-                            <ResultPanel report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
+                            <VulnerabilityReport report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
                         )}
                     </div>
                 )}
