@@ -5,11 +5,11 @@ from langchain_core.output_parsers import StrOutputParser
 
 from tools.sast_tools import read_source_code
 
-def generate_fixes(sast_report: dict, local_repo_path: str) -> dict:
+def generate_fixes(sast_report, local_repo_path: str) -> list:
     """
     Generates suggested fixes for vulnerabilities found in the SAST report.
     """
-    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.3)
     prompt = PromptTemplate.from_template("""
 Given the following vulnerability and the original source code, generate a patch in the diff format to fix the issue.
 
@@ -24,8 +24,20 @@ Return only the patch content, starting with "--- a/{file_path}".
 
     chain = prompt | llm | StrOutputParser()
 
+    # Handle both dict and list formats
+    if isinstance(sast_report, dict):
+        vulnerabilities = sast_report.get('vulnerabilities', [])
+    elif isinstance(sast_report, list):
+        vulnerabilities = sast_report
+    else:
+        vulnerabilities = []
+
     suggested_fixes = []
-    for vulnerability in sast_report.get('vulnerabilities', []):
+    for vulnerability in vulnerabilities:
+        # Skip if vulnerability doesn't have required fields
+        if not isinstance(vulnerability, dict) or 'file' not in vulnerability:
+            continue
+            
         file_path = os.path.join(local_repo_path, vulnerability['file'])
         try:
             original_code = read_source_code(file_path)
@@ -38,10 +50,10 @@ Return only the patch content, starting with "--- a/{file_path}".
 
             suggested_fixes.append({
                 'file_path': vulnerability['file'],
-                'description': f"Fix for {vulnerability['type']} in {vulnerability['file']}",
+                'description': f"Fix for {vulnerability.get('type', 'vulnerability')} in {vulnerability['file']}",
                 'patch': patch
             })
-        except FileNotFoundError:
+        except (FileNotFoundError, KeyError, Exception):
             pass
 
     return suggested_fixes

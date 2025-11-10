@@ -190,7 +190,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApp
         }
     };
     
-    const meta = reportMeta[report.status];
+    const meta = reportMeta[report.status] ?? reportMeta['BUILD_FAILED'];
 
     const renderContent = () => {
         switch (report.status) {
@@ -217,25 +217,24 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApp
         }
     };
 
-    const Wrapper = isModalView ? 'div' : 'button';
-    const wrapperProps = isModalView ? {} : { onClick, className: "w-full h-full text-left" };
-
     const containerClasses = isModalView 
         ? "bg-transparent dark:bg-transparent"
         : "bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 h-full flex flex-col cursor-pointer hover:border-sky-400 dark:hover:border-sky-500 transition-colors";
 
+    const wrapperProps = isModalView ? {} : { onClick, role: "button", tabIndex: 0 };
+
     return (
-        <Wrapper {...wrapperProps}>
+        <div {...wrapperProps} className="w-full h-full">
             <div className={containerClasses}>
                 <div className={`flex items-center gap-3 border-b border-gray-200 dark:border-gray-600 pb-2 mb-2`}>
-                    <div className={meta.color}>{meta.icon}</div>
-                    <h2 className={`text-lg font-semibold ${meta.color}`}>{meta.title}</h2>
+                    <div className={meta?.color ?? 'text-gray-700'}>{meta.icon}</div>
+                    <h2 className={`text-lg font-semibold ${meta?.color ?? 'text-gray-700'}`}>{meta.title}</h2>
                 </div>
                 <div className="flex-grow overflow-y-auto bg-slate-100 dark:bg-black rounded-md p-2 flex flex-col gap-1.5">
                     {renderContent()}
                 </div>
             </div>
-        </Wrapper>
+        </div>
     );
 };
 

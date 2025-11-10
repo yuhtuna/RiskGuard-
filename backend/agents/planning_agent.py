@@ -7,7 +7,7 @@ def create_attack_plan(sast_report: dict, sandbox_url: str) -> dict:
     """
     Creates a DAST attack plan based on the SAST report.
     """
-    llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.5)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.5)
     prompt = PromptTemplate.from_template("""
 Given the following SAST report, create a DAST attack plan for the live application at {sandbox_url}.
 For each vulnerability, devise a specific HTTP request (including target URL, method, headers, and payload) to confirm or exploit it.
