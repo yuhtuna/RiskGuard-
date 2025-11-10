@@ -79,6 +79,7 @@ const App: React.FC = () => {
     }, []);
     
     const handleSseStream = async (response: Response) => {
+        console.log("handleSseStream", response);
         if (!response.body) {
             throw new Error("Response has no body");
         }
