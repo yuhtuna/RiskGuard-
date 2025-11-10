@@ -258,41 +258,6 @@ def download_fixed_code() -> Any:
     except Exception as e:
         return jsonify({"error": f"Failed to create zip archive: {str(e)}"}), 500
 
-@app.route('/api/regenerate-fixes', methods=['POST'])
-@cross_origin()
-def regenerate_fixes_endpoint() -> Response:
-    """
-    Regenerates fixes based on the current SAST report.
-    """
-    data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
-
-    def generate_fixes_events():
-        # Regenerate Fixes
-        fixes = generate_fixes(scan_state["sast_report"], scan_state["local_repo_path"])
-        scan_state["suggested_fixes"] = fixes
-        yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
-        yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
-
-    return Response(generate_fixes_events(), mimetype='text/event-stream')
-
-@app.route('/api/finish', methods=['POST'])
-@cross_origin()
-def finish_scan() -> Dict[str, Any]:
-    """
-    Cleans up the sandbox environment.
-    """
-    data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
-    # Destroy Sandbox
-    if SKIP_GCP_DEPLOYMENT:
-        print("Skipping GCP cleanup (local testing mode)")
-    else:
-        destroy_sandbox(scan_state["service_name"], GCP_PROJECT_ID, GCP_REGION)
-    return jsonify({"status": "Sandbox destroyed"})
-
 if __name__ == '__main__':
     # Disable debug mode to avoid watchdog reloader issues
     app.run(host='0.0.0.0', port=8080, debug=False)
