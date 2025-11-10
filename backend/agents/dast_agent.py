@@ -8,16 +8,25 @@ def run_dast_scan(attack_plan: dict) -> dict:
         attack_plan: The DAST attack plan.
 
     Returns:
-        A dictionary representing the DAST report.
+        A dictionary representing the DAST report with 'vulnerabilities' key.
     """
-    dast_results = []
-    for step in attack_plan.get('steps', []):
+    print(f"[DAST Agent] Received attack plan with {len(attack_plan.get('steps', []))} steps")
+    
+    dast_vulnerabilities = []
+    steps = attack_plan.get('steps', [])
+    
+    if not steps:
+        print("[DAST Agent] WARNING: No attack steps found in the plan!")
+    
+    for i, step in enumerate(steps):
+        print(f"[DAST Agent] Executing step {i+1}/{len(steps)}: {step.get('vulnerability_type', 'Unknown')}")
         result = execute_exploit(step)
-        dast_results.append(result)
+        dast_vulnerabilities.append(result)
 
     dast_report = {
-        'results': dast_results,
-        'summary': f"Executed {len(dast_results)} attack steps."
+        'vulnerabilities': dast_vulnerabilities,
+        'summary': f"Executed {len(dast_vulnerabilities)} attack steps. Found {sum(1 for v in dast_vulnerabilities if v.get('status') == 'SUCCESS')} confirmed vulnerabilities."
     }
 
+    print(f"[DAST Agent] Completed: {dast_report['summary']}")
     return dast_report

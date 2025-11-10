@@ -15,7 +15,21 @@ For each vulnerability, devise a specific HTTP request (including target URL, me
 SAST Report:
 {sast_report}
 
-Return the plan in a valid JSON format.
+Return ONLY a valid JSON object with this exact structure:
+{{
+  "steps": [
+    {{
+      "vulnerability_type": "SQL Injection",
+      "target_url": "http://example.com/api/endpoint",
+      "method": "POST",
+      "headers": {{"Content-Type": "application/json"}},
+      "payload": {{"id": "1' OR '1'='1"}},
+      "description": "Testing SQL injection on id parameter"
+    }}
+  ]
+}}
+
+Make sure to create at least one attack step for each vulnerability found in the SAST report.
 """)
 
     chain = prompt | llm | StrOutputParser()
@@ -26,6 +40,25 @@ Return the plan in a valid JSON format.
     })
 
     try:
-        return json.loads(response.replace("```json", "").replace("```", ""))
-    except json.JSONDecodeError:
-        return {"steps": [], "summary": "Failed to parse attack plan."}
+        # Clean up the response
+        cleaned = response.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        
+        parsed = json.loads(cleaned)
+        
+        # Ensure the response has the expected structure
+        if "steps" not in parsed:
+            parsed = {"steps": []}
+        
+        print(f"[Planning Agent] Generated {len(parsed.get('steps', []))} attack steps")
+        return parsed
+    except json.JSONDecodeError as e:
+        print(f"[Planning Agent] Failed to parse attack plan: {e}")
+        print(f"[Planning Agent] Raw response: {response[:500]}")
+        return {"steps": []}
