@@ -109,52 +109,33 @@ interface ResultPanelProps {
     appliedFixes?: string[];
     isModalView?: boolean;
     graphState?: Partial<HASTGraphState>;
+    onRegenerateFixes?: () => void;
+    onFinish?: () => void;
+    exploitSucceeded?: boolean;
 }
 
-const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false, graphState }) => {
-    const handleDownload = async () => {
-        if (!graphState) return;
-        try {
-            const response = await fetch('http://127.0.0.1:8080/api/download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ graph_state: graphState }),
-            });
-            if (!response.ok) throw new Error('Download failed');
-            const { data } = await response.json();
-            const byteCharacters = atob(data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'fixed_source.zip';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error('Download error:', error);
-        }
-    };
-
-    if (fixes && onApplyFix && onRunDast && appliedFixes) {
+const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApplyFix, onRunDast, appliedFixes, isModalView = false, graphState, onRegenerateFixes, onFinish, exploitSucceeded }) => {
+    if (fixes && onApplyFix && onRunDast && appliedFixes && onRegenerateFixes && onFinish) {
         return (
             <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 h-full flex flex-col">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
                     <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Suggested Fixes</h2>
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleDownload}
-                            className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-3 rounded-md text-sm"
-                        >
-                            Download Code
-                        </button>
+                        {exploitSucceeded ? (
+                            <button
+                                onClick={onRegenerateFixes}
+                                className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-1 px-3 rounded-md text-sm"
+                            >
+                                Regenerate Fixes
+                            </button>
+                        ) : (
+                            <button
+                                onClick={onFinish}
+                                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-1 px-3 rounded-md text-sm"
+                            >
+                                Finish & Download
+                            </button>
+                        )}
                         <button 
                             onClick={onRunDast}
                             className="bg-green-600 hover:bg-green-500 text-white font-bold py-1 px-3 rounded-md text-sm"
