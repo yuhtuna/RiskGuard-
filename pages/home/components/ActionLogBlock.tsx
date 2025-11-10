@@ -31,9 +31,9 @@ const LogDetailLine: React.FC<{ log: LogEntry }> = ({ log }) => {
     };
 
     return (
-        <div className={`flex items-start gap-3 text-sm p-2 rounded-md ${colorMap[log.type]} ${bgClassMap[log.type]}`}>
+        <div className={`flex items-start gap-3 text-sm p-2 rounded-md border border-transparent shadow-sm ${colorMap[log.type]} ${bgClassMap[log.type]}`}>
             <div className="flex-shrink-0 pt-0.5">{iconMap[log.type]}</div>
-            <div className="flex-grow break-words min-w-0">{log.message}</div>
+            <div className="flex-grow break-all min-w-0">{log.message}</div>
             <div className="flex-shrink-0 text-gray-400 dark:text-gray-500 text-xs pt-0.5 ml-2">
                 {new Date(Number(log.timestamp) * 1000).toLocaleTimeString()}
             </div>

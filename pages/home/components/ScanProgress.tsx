@@ -92,19 +92,27 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         { key: 'final_report', label: 'Final Report' },
     ];
 
-    // Find the index of the first step that is not yet present in graphState
-    const activeStepIndex = orderedSteps.findIndex(step => !(step.key in graphState));
+    let lastCompletedIndex = -1;
+    for (let i = orderedSteps.length - 1; i >= 0; i--) {
+        if (orderedSteps[i].key in graphState) {
+            lastCompletedIndex = i;
+            break;
+        }
+    }
 
     const steps: ScanStep[] = orderedSteps.map((stepInfo, index) => {
         const value = graphState[stepInfo.key];
         let status: 'complete' | 'active' | 'upcoming' = 'upcoming';
         let details: string | null = null;
 
-        if (index < activeStepIndex || activeStepIndex === -1) {
+        if (index < lastCompletedIndex) {
             status = 'complete';
-        } else if (index === activeStepIndex) {
+        } else if (index === lastCompletedIndex) {
+            status = 'complete';
+        } else if (index === lastCompletedIndex + 1) {
             status = 'active';
         }
+
 
         if (value) {
             if (typeof value === 'object' && value !== null) {

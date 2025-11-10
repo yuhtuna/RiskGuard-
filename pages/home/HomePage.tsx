@@ -278,9 +278,13 @@ const HomePage: React.FC = () => {
                 />
                 {(isRunning || graphState.source_code_url) && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <ScanProgress graphState={graphState} />
-                            <ActivityLog logs={actionLogs} />
+                        <div className="flex flex-col gap-6">
+                            <div className="resizable" style={{ minHeight: '200px' }}>
+                                <ScanProgress graphState={graphState} />
+                            </div>
+                            <div className="resizable" style={{ minHeight: '200px' }}>
+                                <ActivityLog logs={actionLogs} />
+                            </div>
                         </div>
                         {showFixes && (
                             <VulnerabilityReport
@@ -303,6 +307,18 @@ const HomePage: React.FC = () => {
             {isModalOpen && hasReport && graphState.final_report && (
                  <FinalReportModal report={graphState.final_report} onClose={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: false })} />
             )}
+            <style jsx global>{`
+                .resizable {
+                    resize: vertical;
+                    overflow: auto;
+                    border: 1px solid transparent;
+                    transition: border 0.2s ease-in-out;
+                }
+                .resizable:hover,
+                .resizable:active {
+                    border: 1px dashed #9ca3af;
+                }
+            `}</style>
         </div>
     );
 };
