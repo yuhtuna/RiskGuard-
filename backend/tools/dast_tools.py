@@ -1,10 +1,8 @@
 import os
 import requests
-from google.adk.tools import tool
 import google.auth
 import google.auth.transport.requests
 
-@tool
 def execute_exploit(attack_step: dict) -> dict:
     """
     Triggers a secure, isolated Cloud Run Job to execute a single DAST attack step.

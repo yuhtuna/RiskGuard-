@@ -115,10 +115,10 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ report, fixes, onClick, onApp
     const handleDownload = async () => {
         if (!graphState) return;
         try {
-            const response = await fetch('/download_fixed_code', {
+            const response = await fetch('http://127.0.0.1:8080/api/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ current_graph_state: graphState }),
+                body: JSON.stringify({ graph_state: graphState }),
             });
             if (!response.ok) throw new Error('Download failed');
             const { data } = await response.json();

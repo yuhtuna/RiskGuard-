@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { HASTGraphState, NodeStatus, NodeKey, LogEntry, LogType, Theme, ActionLog, FinalReport } from './types';
-import { WORKFLOW_NODES, WORKFLOW_EDGES } from './constants';
+import type { HASTGraphState, NodeStatus, NodeKey, Theme, ActionLog } from './types';
+import { WORKFLOW_NODES } from './constants';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import StatePanel from './components/StatePanel';
@@ -8,6 +8,21 @@ import LogPanel from './components/LogPanel';
 import WorkflowDiagram from './components/WorkflowDiagram';
 import ResultPanel from './components/ResultPanel';
 import FinalReportModal from './components/FinalReportModal';
+
+// Utility function to convert File to base64
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            const base64 = reader.result as string;
+            // Remove the data:*/*;base64, prefix
+            const base64Data = base64.split(',')[1];
+            resolve(base64Data);
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+    });
+};
 
 const App: React.FC = () => {
     const [theme, setTheme] = useState<Theme>(() => {
@@ -95,7 +110,7 @@ const App: React.FC = () => {
                                         const actionKey = payload.node as keyof typeof actionMap;
                                         if (actionMap[actionKey]) {
                                             setActionLogs(prev => {
-                                                if (prev.find(a => a.key === actionKey)) return prev;
+                                                if (prev.some(a => a.key === actionKey)) return prev;
                                                 return [...prev, { key: actionKey, title: actionMap[actionKey], status: 'active', detailLogs: [] }];
                                             });
                                         }
@@ -161,7 +176,7 @@ const App: React.FC = () => {
 
         try {
             const base64File = await fileToBase64(file);
-            const response = await fetch('/start_full_scan', {
+            const response = await fetch('http://127.0.0.1:8080/api/scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ zip_file_base64: base64File }),
@@ -189,10 +204,10 @@ const App: React.FC = () => {
 
     const handleApplyFix = useCallback(async (patch: string) => {
         try {
-            const response = await fetch('/apply_fix_and_update_state', {
+            const response = await fetch('http://127.0.0.1:8080/api/apply-fix', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ patch, current_graph_state: graphState }),
+                body: JSON.stringify({ patch, graph_state: graphState }),
             });
             if (!response.ok) {
                 const errorData = await response.json();
@@ -209,10 +224,10 @@ const App: React.FC = () => {
 
     const handleRunDast = useCallback(async () => {
         try {
-            const response = await fetch('/continue_scan_with_dast', {
+            const response = await fetch('http://127.0.0.1:8080/api/continue-scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ current_graph_state: graphState }),
+                body: JSON.stringify({ graph_state: graphState }),
             });
             if (!response.ok) {
                 const errorData = await response.json();
