@@ -54,7 +54,21 @@ const Step: React.FC<{ step: ScanStep; isLast: boolean }> = ({ step, isLast }) =
         <div className="flex items-start">
             <div className="flex flex-col items-center mr-4">
                 {getIcon()}
-                {!isLast && <div className={`w-px h-12 mt-2 ${step.status === 'complete' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}></div>}
+                {!isLast && (
+                    <div className="w-px h-12 mt-2 relative">
+                        <div className={`absolute inset-0 bg-gray-300 dark:bg-gray-600 ${step.status === 'complete' ? 'bg-green-500' : ''}`}></div>
+                        {step.status === 'active' && (
+                            <div
+                                className="absolute inset-0 bg-transparent"
+                                style={{
+                                    backgroundImage: `linear-gradient(0deg, transparent, transparent 50%, #3b82f6 50%, #3b82f6)`,
+                                    backgroundSize: '4px 8px',
+                                    animation: 'marching-ants 1s linear infinite',
+                                }}
+                            ></div>
+                        )}
+                    </div>
+                )}
             </div>
             <div className={`border-l-4 pl-4 -ml-px ${getStatusClasses()}`}>
                 <h3 className={`font-semibold ${step.status === 'complete' ? 'text-gray-700 dark:text-gray-300' : 'text-gray-800 dark:text-white'}`}>{step.label}</h3>
@@ -78,29 +92,29 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         { key: 'final_report', label: 'Final Report' },
     ];
 
-    // Determine the status of each step based on graphState
-    let activeStepFound = false;
-    const steps: ScanStep[] = orderedSteps.map(stepInfo => {
+    // Find the index of the first step that is not yet present in graphState
+    const activeStepIndex = orderedSteps.findIndex(step => !(step.key in graphState));
+
+    const steps: ScanStep[] = orderedSteps.map((stepInfo, index) => {
         const value = graphState[stepInfo.key];
         let status: 'complete' | 'active' | 'upcoming' = 'upcoming';
         let details: string | null = null;
 
+        if (index < activeStepIndex || activeStepIndex === -1) {
+            status = 'complete';
+        } else if (index === activeStepIndex) {
+            status = 'active';
+        }
+
         if (value) {
             if (typeof value === 'object' && value !== null) {
-                status = 'complete';
+                details = 'Report generated';
             } else if (typeof value === 'string') {
                 if (value.startsWith('http') || value.startsWith('gs://')) {
-                    status = 'complete';
                     details = 'Report generated';
                 } else {
-                    status = 'complete';
                     details = value;
                 }
-            }
-        } else {
-            if (!activeStepFound) {
-                status = 'active';
-                activeStepFound = true;
             }
         }
 
@@ -112,8 +126,6 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
             } else if (graphState.build_status === 'FAILURE') {
                 status = 'complete'; // Or 'failed' if you add that state
                 details = 'Build failed';
-            } else if (!graphState.build_status && graphState.source_code_url) {
-                status = 'active';
             }
         }
 
@@ -138,6 +150,13 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
                     <Step key={step.key} step={step} isLast={index === steps.length - 1} />
                 ))}
             </div>
+            <style jsx global>{`
+                @keyframes marching-ants {
+                    to {
+                        background-position: 0 100%;
+                    }
+                }
+            `}</style>
         </div>
     );
 };
