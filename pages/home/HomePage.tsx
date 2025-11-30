@@ -1,13 +1,11 @@
 import React, { useReducer, useCallback, useRef, useEffect, useState } from 'react';
-import type { HASTGraphState, NodeStatus, NodeKey, Theme, ActionLog } from '../../types';
-import { WORKFLOW_NODES } from '../../constants';
-import Header from './components/Header';
+import type { Theme } from '../../types';
 import ControlPanel from './components/ControlPanel';
 import ScanProgress from './components/ScanProgress';
 import ActivityLog from './components/ActivityLog';
 import VulnerabilityReport from './components/VulnerabilityReport';
 import FinalReportModal from './components/FinalReportModal';
-import Welcome from './components/Welcome';
+import DashboardLayout from './components/DashboardLayout';
 import { initialState, reducer } from './state';
 import { useSse } from './useSse';
 
@@ -30,14 +28,14 @@ const HomePage: React.FC = () => {
     const [state, dispatch] = useReducer(reducer, initialState);
     const {
         isRunning,
-        activeNode,
-        nodeStatuses,
         graphState,
         actionLogs,
         isModalOpen,
         scanError,
         appliedFixes,
     } = state;
+
+    // Theme Management
     const [theme, setTheme] = useState<Theme>(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
             const storedTheme = window.localStorage.getItem('theme') as Theme | null;
@@ -46,6 +44,7 @@ const HomePage: React.FC = () => {
         }
         return 'dark';
     });
+
     const eventSourceRef = useRef<EventSource | null>(null);
 
     const actionMap = {
@@ -255,71 +254,74 @@ const HomePage: React.FC = () => {
 
     const dastReport = graphState.dast_report;
     const exploitSucceeded = dastReport?.vulnerabilities?.some((v) => v.status === 'SUCCESS') || false;
-
-    // Show final report only if Dynamic Exploit Testing completed successfully (exploit failed = fix worked)
     const hasReport = !isRunning && graphState.final_report && dastReport && !exploitSucceeded;
-
-    // Show fixes panel if we have fixes AND either:
-    // 1. No Dynamic Exploit Testing report yet (before running Dynamic Exploit Testing)
-    // 2. Dynamic Exploit Testing found vulnerabilities (exploit succeeded = need to regenerate)
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
 
+    // Status Logic for Dashboard
+    let currentStatus = "Ready to Scan";
+    if (isRunning) currentStatus = "Scanning in progress...";
+    if (showFixes) currentStatus = "Vulnerabilities Detected - Action Required";
+    if (hasReport) currentStatus = "System Secure - Report Available";
+
     return (
-        <div className="h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
-            <Header theme={theme} onToggleTheme={toggleTheme} />
-            <main className="flex-grow p-4 lg:p-6 flex flex-col gap-6">
-                {!isRunning && !graphState.source_code_url && (
-                    <Welcome />
-                )}
-                <ControlPanel
-                    onStartScan={handleStartScan}
-                    isRunning={isRunning}
-                    scanError={scanError}
-                />
-                {(isRunning || graphState.source_code_url) && (
-                    <div className="space-y-6">
-                        <div className="flex flex-col gap-6">
-                            <div className="resizable" style={{ minHeight: '200px' }}>
+        <DashboardLayout
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            isRunning={isRunning}
+            statusMessage={currentStatus}
+        >
+            <div className="flex flex-col gap-8 pb-10">
+                {/* Top Section: Control & Progress */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-1">
+                         <ControlPanel
+                            onStartScan={handleStartScan}
+                            isRunning={isRunning}
+                            scanError={scanError}
+                        />
+                    </div>
+
+                    {(isRunning || graphState.source_code_url) && (
+                        <div className="lg:col-span-2">
+                             <div className="bg-cream-100 dark:bg-navy-800/80 backdrop-blur border border-cream-200 dark:border-navy-700 rounded-xl shadow-xl p-6 h-full flex items-center">
                                 <ScanProgress graphState={graphState} />
-                            </div>
-                            <div className="resizable" style={{ minHeight: '200px' }}>
-                                <ActivityLog logs={actionLogs} />
-                            </div>
+                             </div>
                         </div>
-                        {showFixes && (
-                            <VulnerabilityReport
-                                fixes={graphState.suggested_fixes}
-                                onApplyFix={handleApplyFix}
-                                onRunDast={handleRunDast}
-                                appliedFixes={appliedFixes}
-                                graphState={graphState}
-                                onRegenerateFixes={handleRegenerateFixes}
-                                onFinish={handleFinish}
-                                exploitSucceeded={exploitSucceeded}
-                            />
-                        )}
-                        {hasReport && graphState.final_report && (
-                            <VulnerabilityReport report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
-                        )}
+                    )}
+                </div>
+
+                {/* Main Workflow Area */}
+                {(isRunning || graphState.source_code_url) && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[600px]">
+                        <div className="h-full">
+                            <ActivityLog logs={actionLogs} />
+                        </div>
+
+                        <div className="h-full overflow-hidden">
+                             {showFixes && (
+                                <VulnerabilityReport
+                                    fixes={graphState.suggested_fixes}
+                                    onApplyFix={handleApplyFix}
+                                    onRunDast={handleRunDast}
+                                    appliedFixes={appliedFixes}
+                                    graphState={graphState}
+                                    onRegenerateFixes={handleRegenerateFixes}
+                                    onFinish={handleFinish}
+                                    exploitSucceeded={exploitSucceeded}
+                                />
+                            )}
+                            {hasReport && graphState.final_report && (
+                                <VulnerabilityReport report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
+                            )}
+                        </div>
                     </div>
                 )}
-            </main>
+            </div>
+
             {isModalOpen && hasReport && graphState.final_report && (
                  <FinalReportModal report={graphState.final_report} onClose={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: false })} />
             )}
-            <style jsx global>{`
-                .resizable {
-                    resize: vertical;
-                    overflow: auto;
-                    border: 1px solid transparent;
-                    transition: border 0.2s ease-in-out;
-                }
-                .resizable:hover,
-                .resizable:active {
-                    border: 1px dashed #9ca3af;
-                }
-            `}</style>
-        </div>
+        </DashboardLayout>
     );
 };
 
