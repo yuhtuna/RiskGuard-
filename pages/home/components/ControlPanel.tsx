@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
+import { UploadIcon, ZapIcon } from './Icons';
 
 interface ControlPanelProps {
     onStartScan: (file: File) => void;
@@ -30,7 +31,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onStartScan, isRunning, sca
     };
 
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault(); // This is necessary to allow for 'drop'
+        e.preventDefault();
         e.stopPropagation();
     };
 
@@ -51,63 +52,89 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onStartScan, isRunning, sca
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 pb-2">Scan Configuration</h2>
-            <div>
-                <label htmlFor="file-upload" className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                    Upload Source Code (ZIP)
-                </label>
-                <div 
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md transition-colors ${isDragOver ? 'border-sky-500 bg-sky-100 dark:bg-sky-900/50' : 'border-gray-300 dark:border-gray-600'}`}
-                >
-                    <div className="space-y-1 text-center">
-                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <div className="flex text-sm text-gray-600 dark:text-gray-400">
-                            <label htmlFor="file-upload" className="relative cursor-pointer bg-transparent rounded-md font-medium text-sky-600 hover:text-sky-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-sky-500">
-                                <span>Upload a file</span>
-                                <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".zip" disabled={isRunning} />
-                            </label>
-                            <p className="pl-1">or drag and drop</p>
+        <div className="bg-cream-100 dark:bg-navy-800/80 backdrop-blur-md border border-cream-200 dark:border-navy-700 rounded-xl p-6 shadow-xl transition-all duration-300">
+            <h2 className="text-xl font-bold text-navy-800 dark:text-cream-50 border-b border-cream-200 dark:border-navy-600 pb-3 mb-4 flex items-center gap-2">
+                <UploadIcon className="w-5 h-5 text-navy-500" />
+                Upload Target
+            </h2>
+
+            <div className="flex flex-col gap-6">
+                <div>
+                    <label htmlFor="file-upload" className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                        Source Code Archive
+                    </label>
+                    <div
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                        className={`
+                            relative group cursor-pointer
+                            flex flex-col justify-center items-center px-6 py-10
+                            border-2 border-dashed rounded-xl transition-all duration-300
+                            ${isDragOver
+                                ? 'border-navy-500 bg-navy-500/10 scale-[1.02]'
+                                : 'border-gray-300 dark:border-gray-600 hover:border-navy-500/50 hover:bg-navy-500/5'}
+                        `}
+                    >
+                        <input id="file-upload" name="file-upload" type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} accept=".zip" disabled={isRunning} />
+
+                        <div className="p-4 rounded-full bg-cream-50 dark:bg-navy-700 mb-3 group-hover:scale-110 transition-transform duration-300 shadow-lg">
+                            <UploadIcon className="h-8 w-8 text-navy-500" />
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                            ZIP up to <span className="font-bold">50MB</span>
-                        </p>
+
+                        <div className="text-center">
+                            <p className="text-lg font-medium text-navy-800 dark:text-cream-100">
+                                Drop your ZIP file here
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                or click to browse
+                            </p>
+                        </div>
                     </div>
+
+                    {selectedFile && (
+                        <div className="mt-4 p-3 bg-navy-500/10 border border-navy-500/20 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                            <span className="text-sm font-medium text-navy-800 dark:text-cream-100 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-navy-500"></span>
+                                {selectedFile.name}
+                            </span>
+                            <span className="text-xs text-navy-500 font-mono">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                    )}
+
+                    {scanError && (
+                        <div className="mt-4 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-600/50 rounded-lg p-3 shadow-sm animate-pulse">
+                            <span className="font-bold">Error:</span> {scanError}
+                        </div>
+                    )}
                 </div>
-                {selectedFile && (
-                    <div className="mt-3 text-sm text-gray-700 dark:text-gray-300">
-                        <span className="font-medium">Selected file:</span> {selectedFile.name}
-                    </div>
-                )}
-                {scanError && (
-                    <div className="mt-2 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600 rounded-md p-2">
-                        {scanError}
-                    </div>
-                )}
+
+                <button
+                    onClick={handleStartClick}
+                    disabled={isRunning || !selectedFile}
+                    className={`
+                        w-full py-4 px-6 rounded-lg font-bold text-lg tracking-wide uppercase transition-all duration-300 shadow-lg
+                        flex items-center justify-center gap-3 overflow-hidden relative
+                        ${isRunning || !selectedFile
+                            ? 'bg-gray-300 dark:bg-navy-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-navy-800 hover:bg-navy-700 dark:bg-navy-500 dark:hover:bg-navy-400 text-cream-100 dark:text-navy-900 hover:-translate-y-1 hover:shadow-navy-500/25'}
+                    `}
+                >
+                    {isRunning ? (
+                        <>
+                            <ZapIcon className="animate-spin h-6 w-6" />
+                            <span>Processing...</span>
+                            <div className="absolute bottom-0 left-0 h-1 bg-navy-500 animate-[loading_2s_ease-in-out_infinite] w-full"></div>
+                        </>
+                    ) : (
+                        <>
+                            <ZapIcon className="h-6 w-6" />
+                            <span>Initialize Scan</span>
+                        </>
+                    )}
+                </button>
             </div>
-            <button
-                onClick={handleStartClick}
-                disabled={isRunning || !selectedFile}
-                className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-400 dark:disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all duration-200 ease-in-out flex items-center justify-center gap-2"
-            >
-                {isRunning ? (
-                    <>
-                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Running Scan...
-                    </>
-                ) : (
-                    'Start Scan'
-                )}
-            </button>
         </div>
     );
 };
