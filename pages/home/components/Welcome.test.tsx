@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 describe('Welcome component', () => {
     it('renders the welcome message', () => {
         render(<Welcome />);
-        expect(screen.getByText('Welcome to the HAST Agent Visualizer')).toBeInTheDocument();
+        expect(screen.getByText('Secure Your Code with AI')).toBeInTheDocument();
+        expect(screen.getByText(/RiskGuard analyzes, detects vulnerabilities/)).toBeInTheDocument();
     });
 });

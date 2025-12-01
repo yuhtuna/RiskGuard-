@@ -8,6 +8,7 @@ import ActivityLog from './components/ActivityLog';
 import VulnerabilityReport from './components/VulnerabilityReport';
 import FinalReportModal from './components/FinalReportModal';
 import Welcome from './components/Welcome';
+import AnimatedBackground from './components/AnimatedBackground';
 import { initialState, reducer } from './state';
 import { useSse } from './useSse';
 
@@ -318,9 +319,10 @@ const HomePage: React.FC = () => {
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
 
     return (
-        <div className="h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
+        <div className="min-h-screen bg-cream-50/90 dark:bg-navy-900/90 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500">
+            <AnimatedBackground />
             <Header theme={theme} onToggleTheme={toggleTheme} />
-            <main className="flex-grow p-4 lg:p-6 flex flex-col gap-6">
+            <main className="flex-grow container mx-auto p-4 lg:p-8 flex flex-col gap-8 relative z-10">
                 {!isRunning && !graphState.sandbox_url && !graphState.sast_report && (
                     <Welcome />
                 )}
