@@ -11,6 +11,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onStartScan, isRunning, sca
     const [isDragOver, setIsDragOver] = useState(false);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        event.preventDefault();
         if (event.target.files && event.target.files[0]) {
             setSelectedFile(event.target.files[0]);
             onStartScan(event.target.files[0]);
@@ -92,6 +93,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onStartScan, isRunning, sca
                 )}
             </div>
             <button
+                type="button"
                 onClick={handleStartClick}
                 disabled={isRunning || !selectedFile}
                 className="w-full bg-sky-600 hover:bg-sky-500 disabled:bg-gray-400 dark:disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-md transition-all duration-200 ease-in-out flex items-center justify-center gap-2"

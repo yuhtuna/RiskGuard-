@@ -51,6 +51,71 @@ scan_state = {
     "local_repo_path": None,  # Will be set per scan
 }
 
+def _clean_source_files(directory: str):
+    """
+    AGGRESSIVELY cleans ALL encoding artifacts and trailing '?' characters from text files.
+    This is critical to make git patches work correctly.
+    """
+    import logging
+    text_extensions = {'.php', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.cs', '.rb', '.go', '.html', '.css', '.xml', '.json', '.txt', '.md', '.sql'}
+    
+    logging.info(f"Starting aggressive source file cleaning in directory: {directory}")
+    cleaned_files_count = 0
+    
+    for root, dirs, files in os.walk(directory):
+        # Skip .git directory explicitly
+        if '.git' in dirs:
+            dirs.remove('.git')
+            
+        for filename in files:
+            if filename.startswith('.'):
+                continue
+            
+            file_ext = os.path.splitext(filename)[1].lower()
+            if file_ext in text_extensions:
+                file_path = os.path.join(root, filename)
+                try:
+                    # Read raw bytes
+                    with open(file_path, 'rb') as f:
+                        raw_content = f.read()
+
+                    # Remove UTF-8 replacement character bytes
+                    cleaned_raw_content = raw_content.replace(b'\xef\xbf\xbd', b'')
+                    
+                    # Decode with error handling
+                    content = cleaned_raw_content.decode('utf-8', errors='ignore')
+                    
+                    # AGGRESSIVELY clean each line - remove ALL trailing ? and whitespace
+                    lines = content.splitlines()
+                    cleaned_lines = []
+                    modified = False
+                    
+                    for line in lines:
+                        # Strip trailing whitespace and ALL trailing ?
+                        # Keep stripping until nothing left to strip
+                        prev_line = None
+                        while prev_line != line:
+                            prev_line = line
+                            line = line.rstrip('? \t\r\n')
+                            if prev_line != line:
+                                modified = True
+                        cleaned_lines.append(line)
+                    
+                    if modified or cleaned_raw_content != raw_content:
+                        cleaned_content = "\n".join(cleaned_lines)
+                        
+                        # Write back using UTF-8 with Unix line endings
+                        with open(file_path, 'w', encoding='utf-8', newline='\n') as f:
+                            f.write(cleaned_content)
+                        
+                        cleaned_files_count += 1
+                        logging.info(f"Cleaned artifacts from: {file_path}")
+
+                except Exception as e:
+                    logging.warning(f"Warning: Could not clean file {file_path}: {e}")
+
+    logging.info(f"Finished cleaning. Total files cleaned: {cleaned_files_count}")
+
 @app.route('/api/swagger.json')
 def swagger_spec():
     """Serve the OpenAPI specification file"""
@@ -108,6 +173,30 @@ def start_full_scan() -> Response:
             for item in os.listdir(sub_dir):
                 shutil.move(os.path.join(sub_dir, item), local_repo_path)
             os.rmdir(sub_dir)
+        
+        # Clean encoding artifacts from all text files
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Cleaning encoding artifacts from source files...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        _clean_source_files(local_repo_path)
+
+        # Initialize git repository for patch application
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Initializing git repository for patch management...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        try:
+            from git import Repo
+            repo = Repo.init(local_repo_path)
+            # Add all files to git for tracking
+            repo.git.add('.')
+            repo.index.commit("Initial commit - source code upload")
+            
+            # CRITICAL: Clean files AGAIN and update git index
+            # This ensures git's index matches what the LLM will read when generating patches
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Updating git index with cleaned files...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            _clean_source_files(local_repo_path)
+            repo.git.add('.')
+            repo.index.commit("Clean encoding artifacts")
+            
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Git repository initialized successfully', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Warning: Git initialization failed: {e}', 'type': 'warning', 'timestamp': time.time()}}})}\n\n"
 
         dockerfile_path, _ = generate_dockerfile(local_repo_path)
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile is at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
@@ -151,7 +240,10 @@ def start_full_scan() -> Response:
 
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
 
-    return Response(generate_scan_events(), mimetype='text/event-stream')
+    response = Response(generate_scan_events(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 @app.route('/api/apply-fix', methods=['POST'])
 @cross_origin()
@@ -185,15 +277,15 @@ def continue_scan() -> Response:
 
     def generate_dast_events():
         # Re-deploy the patched code to test if fixes work
-        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Re-deploying patched code to new sandbox for DAST testing...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'redeploy_sandbox', 'status': 'active'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'redeploy_sandbox', 'log': {'message': 'Re-deploying patched code to new sandbox for DAST testing...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
         if SKIP_GCP_DEPLOYMENT:
             # Skip GCP deployment - use localhost for testing
             service_url = "http://localhost:8000"
             service_name = "local-testing-patched"
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': f'Using local URL: {service_url}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'redeploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'redeploy_sandbox', 'log': {'message': f'Using local URL: {service_url}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         else:
             # Deploy the patched code to a new sandbox
             service_url = None
@@ -202,24 +294,57 @@ def continue_scan() -> Response:
                 if isinstance(item, tuple) and len(item) == 2:
                     service_url, service_name = item
                 else:
-                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'redeploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
         # Update the sandbox URL to the newly deployed patched version
         scan_state["sandbox_url"] = service_url
         scan_state["service_name"] = service_name
-        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'redeploy_sandbox', 'status': 'success'}})}\n\n"
         
         # Plan Attack
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
-        attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
-        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'success'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Generating attack plan based on SAST findings...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        
+        try:
+            # Add keep-alive during long LLM operation
+            import sys
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Analyzing vulnerabilities...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            sys.stdout.flush()
+            
+            attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
+            scan_state["attack_plan"] = attack_plan
+            
+            attack_steps_count = len(attack_plan.get("steps", []))
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'attack_plan': attack_plan}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': f'Generated {attack_steps_count} attack steps', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'success'}})}\n\n"
+        except Exception as e:
+            error_msg = f"Failed to generate attack plan: {str(e)}"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': error_msg, 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'failure'}})}\n\n"
+            # Set empty attack plan to continue
+            attack_plan = {"steps": []}
+            scan_state["attack_plan"] = attack_plan
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'attack_plan': attack_plan}})}\n\n"
 
         # DAST Scan
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'active'}})}\n\n"
-        dast_report = run_dast_scan(attack_plan)
-        scan_state["dast_report"] = dast_report
-        yield f"data: {json.dumps({'type': 'state', 'payload': {'dast_report': dast_report}})}\n\n"
-        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'success'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'run_dast', 'log': {'message': 'Starting dynamic exploit testing...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        
+        try:
+            dast_report = run_dast_scan(attack_plan)
+            scan_state["dast_report"] = dast_report
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'dast_report': dast_report}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'run_dast', 'log': {'message': 'DAST scan completed', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'success'}})}\n\n"
+        except Exception as e:
+            error_msg = f"DAST scan failed: {str(e)}"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'run_dast', 'log': {'message': error_msg, 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'failure'}})}\n\n"
+            # Set empty DAST report to continue
+            dast_report = {"vulnerabilities": [], "summary": "DAST scan failed"}
+            scan_state["dast_report"] = dast_report
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'dast_report': dast_report}})}\n\n"
 
         # Destroy Sandbox
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'destroy_sandbox', 'status': 'active'}})}\n\n"
@@ -257,8 +382,18 @@ def continue_scan() -> Response:
         scan_state["final_report"] = final_report
         yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
+        print("[continue_scan] Stream completed successfully")
 
-    return Response(generate_dast_events(), mimetype='text/event-stream')
+    try:
+        response = Response(generate_dast_events(), mimetype='text/event-stream')
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['X-Accel-Buffering'] = 'no'
+        return response
+    except Exception as e:
+        print(f"[continue_scan] Error in stream: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Stream error: {str(e)}"}), 500
 
 @app.route('/api/download', methods=['POST'])
 @cross_origin()
@@ -299,15 +434,40 @@ def regenerate_fixes_endpoint() -> Response:
     def generate_fixes_events():
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Previous fix failed. Analyzing DAST results and generating improved fixes...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
-        # Use enhanced fix generation with DAST feedback
+        # Use enhanced fix generation with DAST feedback - only for failed vulnerabilities
         dast_report = scan_state.get("dast_report")
         if dast_report:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Using DAST feedback to generate more robust fixes', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
-            fixes = generate_fixes_with_fallback(
-                scan_state["sast_report"], 
+            # Filter SAST report to only include vulnerabilities that were exploited
+            vulnerabilities = dast_report.get('vulnerabilities', [])
+            failed_vuln_types = set()
+            for v in vulnerabilities:
+                if v.get('status') == 'SUCCESS':
+                    failed_vuln_types.add(v.get('vulnerability_type', ''))
+            
+            # Filter SAST report to only process failed vulnerability types
+            sast_report = scan_state["sast_report"]
+            if isinstance(sast_report, dict):
+                original_vulns = sast_report.get('vulnerabilities', [])
+            else:
+                original_vulns = sast_report
+            
+            # Only regenerate fixes for vulnerabilities that were successfully exploited
+            filtered_vulns = [v for v in original_vulns if v.get('vulnerability_type', '') in failed_vuln_types]
+            
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': f'Focusing on {len(filtered_vulns)} critical vulnerabilities that were exploited', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            
+            # Generate fixes only for filtered vulnerabilities
+            new_fixes = generate_fixes_with_fallback(
+                filtered_vulns, 
                 scan_state["local_repo_path"],
                 dast_report
             )
+            
+            # Keep old fixes for non-exploited vulnerabilities, replace only the failed ones
+            old_fixes = scan_state.get("suggested_fixes", [])
+            failed_files = set(f['file_path'] for f in new_fixes)
+            kept_fixes = [f for f in old_fixes if f['file_path'] not in failed_files]
+            fixes = kept_fixes + new_fixes
         else:
             fixes = generate_fixes(scan_state["sast_report"], scan_state["local_repo_path"])
         
@@ -317,10 +477,13 @@ def regenerate_fixes_endpoint() -> Response:
         scan_state["dast_report"] = None
         
         yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes, 'dast_report': None}})}\n\n"
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': f'Generated {len(fixes)} enhanced fix suggestions', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': f'Generated {len(fixes)} fix suggestions ({len(new_fixes) if dast_report else len(fixes)} new)', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
 
-    return Response(generate_fixes_events(), mimetype='text/event-stream')
+    response = Response(generate_fixes_events(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 @app.route('/api/finish', methods=['POST'])
 @cross_origin()

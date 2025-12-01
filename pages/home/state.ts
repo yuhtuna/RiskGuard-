@@ -29,7 +29,7 @@ export type Action =
     | { type: 'SET_ACTIVE_NODE'; payload: NodeKey | null }
     | { type: 'SET_NODE_STATUS'; payload: { node: NodeKey; status: NodeStatus } }
     | { type: 'SET_GRAPH_STATE'; payload: Partial<HASTGraphState> }
-    | { type: 'ADD_ACTION_LOG'; payload: ActionLog }
+    | { type: 'ADD_ACTION_LOG'; payload: Omit<ActionLog, 'id'> & { id?: string } }
     | { type: 'UPDATE_ACTION_LOG'; payload: { key: NodeKey | string; status: NodeStatus } }
     | { type: 'ADD_DETAIL_LOG'; payload: { actionKey: NodeKey | string; log: any } }
     | { type: 'SET_IS_MODAL_OPEN'; payload: boolean }
@@ -63,7 +63,7 @@ export function reducer(state: AppState, action: Action): AppState {
         case 'ADD_ACTION_LOG':
             return {
                 ...state,
-                actionLogs: [...state.actionLogs, action.payload],
+                actionLogs: [...state.actionLogs, { ...action.payload, id: action.payload.id || `log-${Date.now()}-${Math.random().toString(36).substring(2, 11)}` }],
             };
         case 'UPDATE_ACTION_LOG':
             return {
@@ -84,6 +84,7 @@ export function reducer(state: AppState, action: Action): AppState {
                     actionLogs: [
                         ...state.actionLogs,
                         {
+                            id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
                             key: actionKey,
                             title: 'General',
                             status: 'active',

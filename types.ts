@@ -49,8 +49,9 @@ export interface HASTGraphState {
 export type Theme = 'light' | 'dark';
 
 export interface ActionLog {
-  key: NodeKey | string;
-  title: string;
-  status: NodeStatus;
-  detailLogs: LogEntry[];
+    id: string;
+    key: NodeKey | string;
+    title: string;
+    status: NodeStatus;
+    detailLogs: LogEntry[];
 }

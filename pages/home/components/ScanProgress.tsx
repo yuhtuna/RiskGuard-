@@ -92,9 +92,13 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         { key: 'final_report', label: 'Final Report' },
     ];
 
+    // Find the last step that has data in graphState
     let lastCompletedIndex = -1;
     for (let i = orderedSteps.length - 1; i >= 0; i--) {
-        if (orderedSteps[i].key in graphState) {
+        const key = orderedSteps[i].key;
+        const value = graphState[key];
+        // Check if this step has actual data (not null/undefined)
+        if (value !== null && value !== undefined) {
             lastCompletedIndex = i;
             break;
         }
@@ -102,38 +106,25 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
 
     const steps: ScanStep[] = orderedSteps.map((stepInfo, index) => {
         const value = graphState[stepInfo.key];
-        let status: 'complete' | 'active' | 'upcoming' = 'upcoming';
+        
+        // Determine status based on position relative to last completed
+        const status: 'complete' | 'active' | 'upcoming' = 
+            index <= lastCompletedIndex ? 'complete' :
+            index === lastCompletedIndex + 1 ? 'active' :
+            'upcoming';
+        
         let details: string | null = null;
 
-        if (index < lastCompletedIndex) {
-            status = 'complete';
-        } else if (index === lastCompletedIndex) {
-            status = 'complete';
-        } else if (index === lastCompletedIndex + 1) {
-            status = 'active';
-        }
-
-
-        if (value) {
-            if (typeof value === 'object' && value !== null) {
+        // Generate details based on the value
+        if (value !== null && value !== undefined) {
+            if (stepInfo.key === 'build_status') {
+                details = graphState.build_status === 'SUCCESS' ? 'Build successful' : 
+                          graphState.build_status === 'FAILURE' ? 'Build failed' : null;
+            } else if (typeof value === 'object') {
                 details = 'Report generated';
             } else if (typeof value === 'string') {
-                if (value.startsWith('http') || value.startsWith('gs://')) {
-                    details = 'Report generated';
-                } else {
-                    details = value;
-                }
-            }
-        }
-
-        // Handle build_status specifically
-        if (stepInfo.key === 'build_status') {
-            if (graphState.build_status === 'SUCCESS') {
-                status = 'complete';
-                details = 'Build successful';
-            } else if (graphState.build_status === 'FAILURE') {
-                status = 'complete'; // Or 'failed' if you add that state
-                details = 'Build failed';
+                details = (value.startsWith('http') || value.startsWith('gs://')) ? 
+                          'Report generated' : value;
             }
         }
 
@@ -158,7 +149,7 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
                     <Step key={step.key} step={step} isLast={index === steps.length - 1} />
                 ))}
             </div>
-            <style jsx global>{`
+            <style>{`
                 @keyframes marching-ants {
                     to {
                         background-position: 0 100%;

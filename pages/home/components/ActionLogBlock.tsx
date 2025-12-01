@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { ActionLog, LogEntry, NodeStatus } from '../../types';
+import type { ActionLog, LogEntry, NodeStatus } from '../../../types';
 
 // SVG Icon component for visual representation
 const Icon: React.FC<{ path: string; className?: string }> = ({ path, className }) => (
@@ -31,7 +31,7 @@ const LogDetailLine: React.FC<{ log: LogEntry }> = ({ log }) => {
     };
 
     return (
-        <div className={`flex items-start gap-3 text-sm p-2 rounded-md border border-transparent shadow-sm ${colorMap[log.type]} ${bgClassMap[log.type]}`}>
+        <div className={`flex items-start gap-3 text-sm p-2.5 rounded-md ${colorMap[log.type]} ${bgClassMap[log.type]}`}>
             <div className="flex-shrink-0 pt-0.5">{iconMap[log.type]}</div>
             <div className="flex-grow break-all min-w-0">{log.message}</div>
             <div className="flex-shrink-0 text-gray-400 dark:text-gray-500 text-xs pt-0.5 ml-2">
@@ -85,11 +85,11 @@ const ActionLogBlock: React.FC<ActionLogBlockProps> = ({ action }) => {
     const isClickable = hasDetails || action.status !== 'pending';
 
     return (
-        <div className="bg-white/60 dark:bg-gray-800/40 rounded-lg transition-colors duration-200 shadow-sm">
+        <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg transition-colors duration-200 border border-gray-200 dark:border-gray-700/50">
             <button
                 onClick={() => isClickable && setIsExpanded(!isExpanded)}
                 disabled={!isClickable}
-                className={`w-full text-left flex items-center gap-3 p-2.5 rounded-lg ${isClickable ? 'hover:bg-gray-200/50 dark:hover:bg-gray-700/50 cursor-pointer' : 'cursor-default'}`}
+                className={`w-full text-left flex items-center gap-3 p-3 rounded-lg ${isClickable ? 'hover:bg-gray-100 dark:hover:bg-gray-700/70 cursor-pointer' : 'cursor-default'}`}
             >
                 <div className="flex-shrink-0 w-5 flex items-center justify-center">{statusMap[action.status].icon}</div>
                 <div className={`flex-grow font-sans text-sm font-medium ${statusMap[action.status].color}`}>{action.title}</div>
@@ -106,17 +106,17 @@ const ActionLogBlock: React.FC<ActionLogBlockProps> = ({ action }) => {
                     </svg>
                 )}
             </button>
-            <div
-                className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[500px]' : 'max-h-0'}`}
-            >
-                <div className="border-t border-gray-200 dark:border-gray-700/60 p-3 mt-1 ml-4 pl-6 border-l">
-                    <div className="flex flex-col gap-2.5">
-                        {action.detailLogs.map((log, index) => (
-                            <LogDetailLine key={index} log={log} />
-                        ))}
+            {hasDetails && isExpanded && (
+                <div className="px-3 pb-3 pt-1">
+                    <div className="ml-8 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+                        <div className="flex flex-col gap-2">
+                            {action.detailLogs.map((log, index) => (
+                                <LogDetailLine key={index} log={log} />
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
