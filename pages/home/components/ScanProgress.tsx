@@ -115,10 +115,20 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
 
     const steps: ScanStep[] = orderedSteps.map((stepInfo, index) => {
         const value = graphState[stepInfo.key];
-        const status: 'complete' | 'active' | 'upcoming' = 
-            index <= lastCompletedIndex ? 'complete' :
-            index === lastCompletedIndex + 1 ? 'active' :
-            'upcoming';
+
+        let status: 'complete' | 'active' | 'upcoming';
+
+        if (index <= lastCompletedIndex) {
+            status = 'complete';
+        } else if (index === lastCompletedIndex + 1) {
+            status = 'active';
+        } else {
+            status = 'upcoming';
+        }
+
+        // Special case: if we are at the very beginning (no steps completed),
+        // the first step should be active, not the 0th index if lastCompletedIndex is -1.
+        // The logic above handles this: lastCompletedIndex = -1, index 0 is (0 == -1 + 1) -> active.
         
         let details: string | null = null;
         if (value !== null && value !== undefined) {
@@ -135,30 +145,12 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         return { ...stepInfo, status, details };
     });
 
-    // When used in the sidebar, we want a cleaner look without the big empty state card
-    if (Object.keys(graphState).length <= 1) {
-        return (
-             <div className="h-full bg-white/60 dark:bg-navy-800/60 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-2xl p-6 shadow-xl transition-all duration-300 hover:shadow-2xl">
-                <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-6 flex items-center gap-2 uppercase tracking-wide opacity-80">
-                    Audit Timeline
-                </h2>
-                 <div className="space-y-6 pl-1 opacity-50">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                         <div key={i} className="flex items-start gap-4">
-                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-navy-700 animate-pulse"></div>
-                             <div className="flex-1 space-y-2 pt-1">
-                                <div className="h-4 w-3/4 bg-gray-200 dark:bg-navy-700 rounded animate-pulse"></div>
-                                <div className="h-3 w-1/2 bg-gray-200 dark:bg-navy-700 rounded animate-pulse"></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-             </div>
-        );
-    }
+    // Removed the skeleton loader block so the timeline is always visible
+    // The previous check `if (Object.keys(graphState).length <= 1)` caused it to hide
+    // until some state was populated. Now it will show the steps immediately.
 
     return (
-        <div className="h-full flex flex-col bg-white/60 dark:bg-navy-800/60 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-2xl shadow-xl transition-all duration-300 hover:shadow-2xl overflow-hidden">
+        <div className="h-full flex flex-col w-full">
             <div className="p-6 pb-2 flex-none">
                  <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2 uppercase tracking-wide opacity-80">
                     Audit Timeline
