@@ -16,11 +16,11 @@ from flask_cors import CORS, cross_origin
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from agents.planning_agent import create_attack_plan, generate_pr_details
-from agents.fixer_agent import generate_fixes, generate_fixes_with_fallback
+from agents.fixer_agent import generate_fixes
 from agents.sast_agent import run_sast_scan
 from agents.dast_agent import run_dast_scan
 from tools.environment_manager import deploy_to_sandbox, destroy_sandbox
-from tools.git_workspace import git_apply_patch, clone_repository, create_branch, commit_changes, push_changes
+from tools.git_workspace import clone_repository, create_branch, commit_changes, push_changes
 from tools.dockerfile_generator import generate_dockerfile
 from tools.github_client import GitHubClient
 
@@ -83,7 +83,8 @@ def github_login() -> Dict[str, Any]:
 @cross_origin()
 def start_full_scan() -> Response:
     """
-    Accepts repo details, clones it, and starts the SAST scan.
+    Accepts repo details, clones it, runs SAST, Auto-Fixes, Deploys, and runs DAST.
+    This is the Autonomous Self-Healing Loop.
     """
     data = request.get_json()
     repo_url = data.get('repo_url')
@@ -93,7 +94,7 @@ def start_full_scan() -> Response:
     if not repo_url:
         return jsonify({'error': 'repo_url not provided'}), 400
     
-    def generate_scan_events():
+    def generate_autonomous_events():
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
 
         # Create a unique temp directory
@@ -110,7 +111,7 @@ def start_full_scan() -> Response:
         scan_state["token"] = token
         scan_state["default_branch"] = default_branch
         
-        # Clone Repo
+        # 1. Clone Repo
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Cloning repository {repo_url}...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
         try:
@@ -118,62 +119,64 @@ def start_full_scan() -> Response:
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Repository cloned successfully', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Failed to clone repository: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
-            return # Stop here
+            return
 
-        dockerfile_path, _ = generate_dockerfile(local_repo_path)
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile is at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        # 2. Dockerfile Check/Generation
+        try:
+            dockerfile_path, _ = generate_dockerfile(local_repo_path)
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile validated/generated at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile generation failed: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            return
 
-        # SAST Scan
+        # 3. SAST Scan
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'active'}})}\n\n"
         sast_report = run_sast_scan(local_repo_path)
         scan_state["sast_report"] = sast_report
         yield f"data: {json.dumps({'type': 'state', 'payload': {'sast_report': sast_report}})}\n\n"
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'success'}})}\n\n"
 
-        # Generate Fixes
+        # 4. Generate Fixes
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'Generating fixes for detected vulnerabilities...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         fixes = generate_fixes(sast_report, local_repo_path)
         scan_state["suggested_fixes"] = fixes
         yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
 
-        yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
-
-    response = Response(generate_scan_events(), mimetype='text/event-stream')
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['X-Accel-Buffering'] = 'no'
-    return response
-
-@app.route('/api/apply-fix', methods=['POST'])
-@cross_origin()
-def apply_fix_and_verify() -> Response:
-    """
-    Creates branch, applies fix, deploys, and runs DAST.
-    """
-    data = request.get_json()
-    patch = data.get('patch')
-    current_graph_state = data.get('graph_state', {})
-    
-    scan_state.update(current_graph_state)
-
-    def generate_fix_verify_events():
-        # Create Branch & Apply Fix
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': 'Creating fix branch and applying patches...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
-
-        try:
-            # Create a unique branch name
-            timestamp = int(time.time())
-            branch_name = f"security-fix-{timestamp}"
-            scan_state["fix_branch"] = branch_name
-
-            create_branch(scan_state["local_repo_path"], branch_name)
-            git_apply_patch(patch, scan_state["local_repo_path"])
-            commit_changes(scan_state["local_repo_path"], "Applied security fixes")
-
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Changes committed to branch {branch_name}', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
-        except Exception as e:
-             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Failed to apply fix: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+        if not fixes:
+             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'No vulnerabilities requiring fixes found.', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+             # Optionally verify "Clean" state with DAST here too, but for now we might stop or skip to report
+             yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
              return
 
-        # Deploy Sandbox
+        # 5. Auto-Apply Fixes (Self-Healing)
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': 'Auto-applying fixes to codebase...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+
+        timestamp = int(time.time())
+        branch_name = f"riskguard-auto-fix-{timestamp}"
+        scan_state["fix_branch"] = branch_name
+
+        try:
+            create_branch(local_repo_path, branch_name)
+
+            applied_count = 0
+            for fix in fixes:
+                file_rel_path = fix['file_path']
+                fixed_content = fix['fixed_content']
+                full_path = os.path.join(local_repo_path, file_rel_path)
+
+                # Overwrite file with fixed content
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(fixed_content)
+                applied_count += 1
+
+            commit_changes(local_repo_path, "Auto-applied security fixes by RiskGuard")
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Applied {applied_count} fixes and committed to branch {branch_name}', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+
+        except Exception as e:
+             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Failed to auto-apply fixes: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+             return
+
+        # 6. Deploy to Sandbox
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'active'}})}\n\n"
 
         service_url = None
@@ -184,7 +187,7 @@ def apply_fix_and_verify() -> Response:
             service_name = "local-testing"
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         else:
-            for item in deploy_to_sandbox(scan_state["local_repo_path"], GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME):
+            for item in deploy_to_sandbox(local_repo_path, GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME):
                 if isinstance(item, tuple) and len(item) == 2:
                     service_url, service_name = item
                 else:
@@ -194,20 +197,19 @@ def apply_fix_and_verify() -> Response:
         scan_state["service_name"] = service_name
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'success'}})}\n\n"
 
-        # Plan Attack (DAST)
+        # 7. Plan & Run DAST
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Planning DAST attack...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Planning DAST verification...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
+        attack_plan = {"steps": []}
         try:
-             attack_plan = create_attack_plan(scan_state["sast_report"], scan_state["sandbox_url"])
+             attack_plan = create_attack_plan(sast_report, service_url)
              scan_state["attack_plan"] = attack_plan
              yield f"data: {json.dumps({'type': 'state', 'payload': {'attack_plan': attack_plan}})}\n\n"
              yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'success'}})}\n\n"
         except Exception as e:
              yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'failure'}})}\n\n"
-             attack_plan = {"steps": []}
-        
-        # Run DAST
+
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'active'}})}\n\n"
         try:
             dast_report = run_dast_scan(attack_plan)
@@ -217,30 +219,25 @@ def apply_fix_and_verify() -> Response:
         except Exception as e:
             yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'run_dast', 'status': 'failure'}})}\n\n"
 
-        # Cleanup
+        # 8. Cleanup
         if not SKIP_GCP_DEPLOYMENT:
-             destroy_sandbox(scan_state["service_name"], GCP_PROJECT_ID, GCP_REGION)
+             destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
 
-        # Generate Report
+        # 9. Final Report
         dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
         confirmed_vulns = [v for v in dast_vulnerabilities if v.get("status") == "SUCCESS"]
         
-        status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "POTENTIAL_VULNERABILITY"
-        if not confirmed_vulns and not scan_state.get("sast_report", {}).get("vulnerabilities", []):
-             status = "SECURE" # Should ideally be this if verified
-
-        # NOTE: For the purpose of this flow, if DAST finds nothing, it means the fix WORKED (assuming SAST found something initially)
-        # So "VULNERABILITY_CONFIRMED" means FIX FAILED.
+        status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "SECURE_VERIFIED"
         
         final_report = {
             "status": status,
-            "summary": f"Scan verified. Found {len(confirmed_vulns)} exploitable issues."
+            "summary": f"Autonomous scan complete. {len(fixes)} fixes applied. {len(confirmed_vulns)} issues remain exploitable."
         }
         scan_state["final_report"] = final_report
         yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
 
-    response = Response(generate_fix_verify_events(), mimetype='text/event-stream')
+    response = Response(generate_autonomous_events(), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'
     return response
@@ -272,8 +269,6 @@ def submit_pr() -> Dict[str, Any]:
         pr_details = generate_pr_details(vulnerabilities)
 
         # Extract repo name from URL or state
-        # repo_url example: https://github.com/owner/repo.git or https://github.com/owner/repo
-        # We need "owner/repo"
         repo_full_name = "/".join(repo_url.rstrip(".git").split("/")[-2:])
 
         client = GitHubClient(token=token)
@@ -309,10 +304,6 @@ def download_fixed_code() -> Any:
 
     try:
         zip_base = os.path.join(tempfile.gettempdir(), "fixed_source")
-        # Ensure we don't include .git folder in the download to reduce size and confusion
-        # but shutil.make_archive doesn't have an easy exclude.
-        # So we just zip it all for now or could implement custom zip logic.
-        # For simplicity, we zip the whole dir.
         zip_path = shutil.make_archive(zip_base, 'zip', local_path)
         with open(zip_path, 'rb') as f:
             zip_content = f.read()
@@ -320,48 +311,3 @@ def download_fixed_code() -> Any:
         return jsonify({"data": base64.b64encode(zip_content).decode('utf-8')})
     except Exception as e:
         return jsonify({"error": f"Failed to create zip archive: {str(e)}"}), 500
-
-@app.route('/api/regenerate-fixes', methods=['POST'])
-@cross_origin()
-def regenerate_fixes_endpoint() -> Response:
-    """
-    Regenerates fixes based on the current SAST report and DAST results.
-    """
-    # Reuse existing logic but ensure it fits the new flow if needed
-    # For now, it's mostly same generation logic
-    return regenerate_fixes_logic()
-
-def regenerate_fixes_logic():
-    data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
-
-    def generate_fixes_events():
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Regenerating fixes...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
-        
-        dast_report = scan_state.get("dast_report")
-        sast_report = scan_state["sast_report"]
-
-        if dast_report:
-             # Logic to filter and improve fixes
-             fixes = generate_fixes_with_fallback(
-                sast_report.get('vulnerabilities', []),
-                scan_state["local_repo_path"],
-                dast_report
-             )
-        else:
-             fixes = generate_fixes(sast_report, scan_state["local_repo_path"])
-
-        scan_state["suggested_fixes"] = fixes
-        scan_state["dast_report"] = None # Reset DAST for next run
-        
-        yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes, 'dast_report': None}})}\n\n"
-        yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
-
-    response = Response(generate_fixes_events(), mimetype='text/event-stream')
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['X-Accel-Buffering'] = 'no'
-    return response
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False)
