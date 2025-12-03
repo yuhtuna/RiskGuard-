@@ -4,10 +4,13 @@ import { WORKFLOW_NODES } from '../../constants';
 import Header from './components/Header';
 import ControlPanel from './components/ControlPanel';
 import ScanProgress from './components/ScanProgress';
-import ActivityLog from './components/ActivityLog';
+import ActiveTaskPane from './components/ActiveTaskPane';
+import TaskHistoryPane from './components/TaskHistoryPane';
 import VulnerabilityReport from './components/VulnerabilityReport';
 import FinalReportModal from './components/FinalReportModal';
 import Welcome from './components/Welcome';
+import AnimatedBackground from './components/AnimatedBackground';
+import DashboardLayout from './components/DashboardLayout';
 import { initialState, reducer } from './state';
 import { useSse } from './useSse';
 
@@ -317,30 +320,40 @@ const HomePage: React.FC = () => {
     // 2. Dynamic Exploit Testing found vulnerabilities (exploit succeeded = need to regenerate)
     const showFixes = !hasReport && graphState.suggested_fixes && graphState.suggested_fixes.length > 0;
 
+    const showDashboard = isRunning || graphState.sandbox_url || graphState.sast_report;
+
+    const activeLog = actionLogs.length > 0 ? actionLogs[actionLogs.length - 1] : undefined;
+    const historyLogs = actionLogs.length > 1 ? actionLogs.slice(0, actionLogs.length - 1).reverse() : [];
+
     return (
-        <div className="h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex flex-col">
+        <div className="h-screen overflow-hidden bg-cream-50/90 dark:bg-navy-900/90 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500">
+            <AnimatedBackground />
             <Header theme={theme} onToggleTheme={toggleTheme} />
-            <main className="flex-grow p-4 lg:p-6 flex flex-col gap-6">
-                {!isRunning && !graphState.sandbox_url && !graphState.sast_report && (
+
+            {!showDashboard ? (
+                <main className="flex-grow container mx-auto p-4 lg:p-6 flex flex-col gap-6 relative z-10 justify-center max-w-2xl overflow-y-auto">
                     <Welcome />
-                )}
-                <ControlPanel
-                    onStartScan={handleStartScan}
-                    isRunning={isRunning}
-                    scanError={scanError}
-                />
-                {(isRunning || graphState.sandbox_url || graphState.sast_report) && (
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 gap-6">
-                            <div className="overflow-auto">
-                                <ScanProgress graphState={graphState} />
-                            </div>
-                            <div className="overflow-auto" style={{ maxHeight: '500px' }}>
-                                <ActivityLog logs={actionLogs} />
-                            </div>
-                        </div>
-                        {showFixes && (
+                    <ControlPanel
+                        onStartScan={handleStartScan}
+                        isRunning={isRunning}
+                        scanError={scanError}
+                    />
+                </main>
+            ) : (
+                <div className="flex-grow relative z-10 h-full overflow-hidden">
+                    <DashboardLayout
+                        sidebar={
+                            <ScanProgress graphState={graphState} />
+                        }
+                        activeTask={
+                            <ActiveTaskPane activeLog={activeLog} />
+                        }
+                        taskHistory={
+                             <TaskHistoryPane logs={historyLogs} />
+                        }
+                        mainContent={
                             <VulnerabilityReport
+                                report={graphState.final_report}
                                 fixes={graphState.suggested_fixes}
                                 onApplyFix={handleApplyFix}
                                 onRunDast={handleRunDast}
@@ -350,13 +363,11 @@ const HomePage: React.FC = () => {
                                 onFinish={handleFinish}
                                 exploitSucceeded={exploitSucceeded}
                             />
-                        )}
-                        {hasReport && graphState.final_report && (
-                            <VulnerabilityReport report={graphState.final_report} onClick={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: true })} />
-                        )}
-                    </div>
-                )}
-            </main>
+                        }
+                    />
+                </div>
+            )}
+
             {isModalOpen && hasReport && graphState.final_report && (
                  <FinalReportModal report={graphState.final_report} onClose={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: false })} />
             )}
