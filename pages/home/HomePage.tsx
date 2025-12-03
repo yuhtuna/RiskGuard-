@@ -115,7 +115,8 @@ const HomePage: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     repo_url: repo.clone_url,
-                    token: githubAuth.token
+                    token: githubAuth.token,
+                    default_branch: repo.default_branch
                 }),
             });
 
@@ -158,7 +159,7 @@ const HomePage: React.FC = () => {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to apply fix');
             }
-            
+
             dispatch({ type: 'ADD_APPLIED_FIX', payload: patch });
             await handleSseStream(response);
 
@@ -220,6 +221,32 @@ const HomePage: React.FC = () => {
         }
     }, [graphState, resetState]);
 
+    const handleDownload = useCallback(async () => {
+        try {
+            const downloadResponse = await fetch('http://127.0.0.1:8080/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ graph_state: graphState }),
+            });
+
+            if (!downloadResponse.ok) {
+                const errorData = await downloadResponse.json();
+                throw new Error(errorData.error || 'Failed to download fixed code');
+            }
+
+            const downloadData = await downloadResponse.json();
+            const a = document.createElement('a');
+            a.href = `data:application/zip;base64,${downloadData.data}`;
+            a.download = 'fixed_source.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            dispatch({ type: 'SET_SCAN_ERROR', payload: `Download failed: ${errorMessage}` });
+        }
+    }, [graphState]);
+
     const dastReport = graphState.dast_report;
     const exploitSucceeded = dastReport?.vulnerabilities?.some((v) => v.status === 'SUCCESS') || false;
 
@@ -273,6 +300,7 @@ const HomePage: React.FC = () => {
                                 graphState={graphState}
                                 onRegenerateFixes={handleRegenerateFixes}
                                 onFinish={handleFinish}
+                                onDownload={handleDownload}
                                 exploitSucceeded={exploitSucceeded}
                             />
                         }

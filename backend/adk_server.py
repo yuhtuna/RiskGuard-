@@ -88,6 +88,7 @@ def start_full_scan() -> Response:
     data = request.get_json()
     repo_url = data.get('repo_url')
     token = data.get('token')
+    default_branch = data.get('default_branch', 'main')
     
     if not repo_url:
         return jsonify({'error': 'repo_url not provided'}), 400
@@ -107,6 +108,7 @@ def start_full_scan() -> Response:
         scan_state["local_repo_path"] = local_repo_path
         scan_state["repo_url"] = repo_url
         scan_state["token"] = token
+        scan_state["default_branch"] = default_branch
         
         # Clone Repo
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Cloning repository {repo_url}...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
@@ -256,6 +258,7 @@ def submit_pr() -> Dict[str, Any]:
     branch_name = scan_state.get("fix_branch")
     token = scan_state.get("token")
     repo_url = scan_state.get("repo_url")
+    default_branch = scan_state.get("default_branch", "main")
 
     if not branch_name or not token:
         return jsonify({"error": "Missing branch or token information"}), 400
@@ -277,7 +280,7 @@ def submit_pr() -> Dict[str, Any]:
         pr_url, msg = client.create_pull_request(
             repo_full_name,
             branch_name,
-            "main", # Assuming main as base, ideally fetch from repo info
+            default_branch,
             pr_details["title"],
             pr_details["body"]
         )
@@ -289,6 +292,34 @@ def submit_pr() -> Dict[str, Any]:
 
     except Exception as e:
         return jsonify({"error": f"Failed to submit PR: {str(e)}"}), 500
+
+@app.route('/api/download', methods=['POST'])
+@cross_origin()
+def download_fixed_code() -> Any:
+    """
+    Zips the fixed code and returns it as a Base64-encoded string.
+    """
+    data = request.get_json()
+    current_graph_state = data.get('graph_state', {})
+    scan_state.update(current_graph_state)
+
+    local_path = scan_state.get("local_repo_path")
+    if not local_path or not os.path.exists(local_path):
+        return jsonify({"error": "Local repository path not found or has been removed."}), 400
+
+    try:
+        zip_base = os.path.join(tempfile.gettempdir(), "fixed_source")
+        # Ensure we don't include .git folder in the download to reduce size and confusion
+        # but shutil.make_archive doesn't have an easy exclude.
+        # So we just zip it all for now or could implement custom zip logic.
+        # For simplicity, we zip the whole dir.
+        zip_path = shutil.make_archive(zip_base, 'zip', local_path)
+        with open(zip_path, 'rb') as f:
+            zip_content = f.read()
+        os.remove(zip_path)
+        return jsonify({"data": base64.b64encode(zip_content).decode('utf-8')})
+    except Exception as e:
+        return jsonify({"error": f"Failed to create zip archive: {str(e)}"}), 500
 
 @app.route('/api/regenerate-fixes', methods=['POST'])
 @cross_origin()

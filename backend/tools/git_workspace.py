@@ -160,9 +160,20 @@ def commit_changes(local_path: str, message: str):
     Commits all current changes to the local repository.
     """
     repo = Repo(local_path)
+
+    # Configure git user identity if not present
+    try:
+        reader = repo.config_reader()
+        if not reader.has_option('user', 'email'):
+            repo.config_writer().set_value('user', 'email', 'bot@riskguard.ai').release()
+            repo.config_writer().set_value('user', 'name', 'RiskGuard Bot').release()
+    except Exception as e:
+        logging.warning(f"Failed to configure git identity: {e}")
+
     repo.git.add(A=True)
-    if repo.is_dirty(index=True, working_tree=False):
-        repo.index.commit(message)
+    # Check if there are changes to commit
+    if repo.is_dirty(index=True, working_tree=True) or repo.untracked_files:
+        repo.git.commit(m=message)
         logging.info(f"Committed changes with message: {message}")
     else:
         logging.info("No changes to commit.")
