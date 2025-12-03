@@ -156,7 +156,7 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
                     Audit Timeline
                 </h2>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-0 pl-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
+            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-0 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
                 {steps.map((step, index) => (
                     <Step key={step.key} step={step} isLast={index === steps.length - 1} />
                 ))}
