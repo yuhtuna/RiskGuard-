@@ -62,3 +62,45 @@ Make sure to create at least one attack step for each vulnerability found in the
         print(f"[Planning Agent] Failed to parse attack plan: {e}")
         print(f"[Planning Agent] Raw response: {response[:500]}")
         return {"steps": []}
+
+def generate_pr_details(vulnerabilities: list) -> dict:
+    """
+    Generates a Pull Request title and body based on the fixed vulnerabilities.
+    """
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.7)
+    prompt = PromptTemplate.from_template("""
+You are a security engineer creating a Pull Request.
+The following vulnerabilities have been fixed in this update:
+{vulnerabilities}
+
+Generate a concise but descriptive Title and a detailed Body for the Pull Request.
+The Body should list the vulnerabilities fixed and explain the security impact.
+
+Return ONLY a valid JSON object with this exact structure:
+{{
+  "title": "Security Fix: [Summary of Fixes]",
+  "body": "## Fixed Vulnerabilities\\n\\n* **[Vuln Type]**: [Description]\\n\\n..."
+}}
+""")
+
+    chain = prompt | llm | StrOutputParser()
+
+    response = chain.invoke({"vulnerabilities": str(vulnerabilities)})
+
+    try:
+        cleaned = response.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        return json.loads(cleaned)
+    except Exception as e:
+        print(f"[Planning Agent] Failed to generate PR details: {e}")
+        return {
+            "title": "Security Fixes",
+            "body": "Fixed detected vulnerabilities."
+        }

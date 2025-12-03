@@ -7,3 +7,4 @@ google-cloud-storage
 gunicorn
 python-dotenv
 langchain-google-genai
+PyGithub

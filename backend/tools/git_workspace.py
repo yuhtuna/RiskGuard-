@@ -116,38 +116,74 @@ def git_apply_patch(patch_content: str, repo_path: str):
         if os.path.exists(patch_file_path):
             os.unlink(patch_file_path)
 
-def git_push_to_new_branch(local_repo_path: str, new_branch_name: str) -> str:
+def clone_repository(repo_url: str, local_path: str, token: str = None) -> Repo:
     """
-    Pushes the committed changes in the local repository to a new branch on the remote repository.
-    Note: This function assumes the local repository has a configured remote named 'origin'.
-    This will fail if the code was uploaded as a zip and not cloned from a git repo.
+    Clones a repository to the local path.
+    If a token is provided, it modifies the URL to include authentication.
     """
-    repo = Repo(local_repo_path)
+    if os.path.exists(local_path):
+        shutil.rmtree(local_path)
 
-    # Check if a remote 'origin' exists
-    if 'origin' not in [remote.name for remote in repo.remotes]:
-        return "Skipped push: No remote 'origin' configured for this repository."
+    auth_url = repo_url
+    if token:
+        # Inject token into URL for basic auth: https://oauth2:TOKEN@github.com/user/repo.git
+        if repo_url.startswith("https://"):
+            auth_url = repo_url.replace("https://", f"https://oauth2:{token}@")
+        elif repo_url.startswith("http://"):
+             auth_url = repo_url.replace("http://", f"http://oauth2:{token}@")
 
-    # Create and checkout the new branch
-    if new_branch_name in repo.heads:
-        new_branch = repo.heads[new_branch_name]
+    try:
+        return Repo.clone_from(auth_url, local_path)
+    except GitCommandError as e:
+        # Don't log the full URL as it contains the token
+        logging.error(f"Failed to clone repository: {str(e).replace(token, '***') if token else str(e)}")
+        raise RuntimeError(f"Failed to clone repository")
+
+def create_branch(local_path: str, branch_name: str):
+    """
+    Creates and checks out a new branch.
+    """
+    repo = Repo(local_path)
+    current = repo.active_branch
+
+    if branch_name in repo.heads:
+        new_branch = repo.heads[branch_name]
         new_branch.checkout()
     else:
-        new_branch = repo.create_head(new_branch_name)
+        new_branch = repo.create_head(branch_name)
         new_branch.checkout()
 
-    # Add all changes to the staging area
-    repo.git.add(A=True)
-    
-    # Commit the changes if there's anything to commit
-    if repo.is_dirty(index=True, working_tree=False):
-        repo.git.commit(m='Apply patch and push to new branch')
-    
-    # Push the changes to the new branch on the remote repository
-    try:
-        push_result = repo.git.push('--set-upstream', 'origin', new_branch_name)
-        return push_result
-    except GitCommandError as e:
-        # Handle cases where push fails (e.g., authentication needed)
-        return f"Failed to push to remote 'origin'. Error: {str(e)}"
+    logging.info(f"Checked out branch: {branch_name}")
 
+def commit_changes(local_path: str, message: str):
+    """
+    Commits all current changes to the local repository.
+    """
+    repo = Repo(local_path)
+    repo.git.add(A=True)
+    if repo.is_dirty(index=True, working_tree=False):
+        repo.index.commit(message)
+        logging.info(f"Committed changes with message: {message}")
+    else:
+        logging.info("No changes to commit.")
+
+def push_changes(local_path: str, token: str, branch_name: str) -> str:
+    """
+    Pushes the current branch to origin.
+    The repo must have been cloned with the token for this to work.
+    """
+    repo = Repo(local_path)
+    try:
+        # Force set the remote url to ensure token is present (persisted from clone, but good to be safe)
+        origin = repo.remotes.origin
+        push_info = origin.push(refspec=f'{branch_name}:{branch_name}', set_upstream=True)
+
+        for info in push_info:
+             if info.flags & info.ERROR:
+                  raise RuntimeError(f"Push failed: {info.summary}")
+
+        logging.info(f"Pushed branch {branch_name} to origin.")
+        return "Success"
+    except GitCommandError as e:
+        logging.error(f"Failed to push: {str(e).replace(token, '***') if token else str(e)}")
+        raise RuntimeError(f"Failed to push changes to remote")
