@@ -1,6 +1,5 @@
 import React, { useReducer, useCallback, useRef, useEffect, useState } from 'react';
-import type { HASTGraphState, NodeStatus, NodeKey, Theme, ActionLog } from '../../types';
-import { WORKFLOW_NODES } from '../../constants';
+import type { HASTGraphState, Theme } from '../../types';
 import Header from './components/Header';
 import ScanProgress from './components/ScanProgress';
 import ActiveTaskPane from './components/ActiveTaskPane';
@@ -19,8 +18,6 @@ const HomePage: React.FC = () => {
     const [state, dispatch] = useReducer(reducer, initialState);
     const {
         isRunning,
-        activeNode,
-        nodeStatuses,
         graphState,
         actionLogs,
         isModalOpen,
@@ -110,7 +107,7 @@ const HomePage: React.FC = () => {
         });
 
         try {
-            const response = await fetch('http://127.0.0.1:8080/api/scan', {
+            const response = await fetch('/api/scan', { // Use relative path for proxy
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -143,87 +140,9 @@ const HomePage: React.FC = () => {
         }
     }, [resetState, handleSseStream, githubAuth]);
 
-    const handleApplyFix = useCallback(async (patch: string) => {
-        // In the new flow, apply fix automatically triggers verify (DAST)
-        // so we start the SSE stream immediately
-        try {
-            dispatch({ type: 'SET_IS_RUNNING', payload: true }); // Ensure running state
-
-            const response = await fetch('http://127.0.0.1:8080/api/apply-fix', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ patch, graph_state: graphState }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to apply fix');
-            }
-
-            dispatch({ type: 'ADD_APPLIED_FIX', payload: patch });
-            await handleSseStream(response);
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            dispatch({ type: 'SET_SCAN_ERROR', payload: `Apply fix failed: ${errorMessage}` });
-        }
-    }, [graphState, handleSseStream]);
-
-    const handleRegenerateFixes = useCallback(async () => {
-        try {
-            dispatch({ type: 'SET_IS_RUNNING', payload: true });
-            dispatch({ type: 'SET_SCAN_ERROR', payload: null });
-            
-            const response = await fetch('http://127.0.0.1:8080/api/regenerate-fixes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ graph_state: graphState }),
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || 'Failed to regenerate fixes');
-            }
-
-            await handleSseStream(response);
-        } catch (error) {
-            console.error('Regenerate fixes error:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            dispatch({ type: 'SET_SCAN_ERROR', payload: `Failed to regenerate fixes: ${errorMessage}` });
-            dispatch({ type: 'SET_IS_RUNNING', payload: false });
-        }
-    }, [graphState, handleSseStream]);
-
-    const handleFinish = useCallback(async () => {
-        try {
-            const response = await fetch('http://127.0.0.1:8080/api/finish', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ graph_state: graphState }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to submit PR');
-            }
-
-            // Show success message or redirect to PR
-            if (data.pr_url) {
-                window.open(data.pr_url, '_blank');
-            }
-
-            resetState();
-            // Optional: reset login or keep logged in
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            dispatch({ type: 'SET_SCAN_ERROR', payload: `Finish process failed: ${errorMessage}` });
-        }
-    }, [graphState, resetState]);
-
     const handleDownload = useCallback(async () => {
         try {
-            const downloadResponse = await fetch('http://127.0.0.1:8080/api/download', {
+            const downloadResponse = await fetch('/api/download', { // Use relative path
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ graph_state: graphState }),
@@ -247,16 +166,12 @@ const HomePage: React.FC = () => {
         }
     }, [graphState]);
 
-    const dastReport = graphState.dast_report;
-    const exploitSucceeded = dastReport?.vulnerabilities?.some((v) => v.status === 'SUCCESS') || false;
-
-    // Show final report only if Dynamic Exploit Testing completed successfully (exploit failed = fix worked)
-    const hasReport = !isRunning && graphState.final_report && dastReport && !exploitSucceeded;
-
-    const showDashboard = isRunning || graphState.sandbox_url || graphState.sast_report;
-
     const activeLog = actionLogs.length > 0 ? actionLogs[actionLogs.length - 1] : undefined;
     const historyLogs = actionLogs.length > 1 ? actionLogs.slice(0, actionLogs.length - 1).reverse() : [];
+
+    // Determine if PR has been generated
+    const prUrl = graphState.final_report?.pr_url;
+    const showDashboard = isRunning || graphState.sandbox_url || graphState.sast_report;
 
     return (
         <div className="h-screen overflow-hidden bg-cream-50/90 dark:bg-navy-900/90 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500">
@@ -294,21 +209,17 @@ const HomePage: React.FC = () => {
                             <VulnerabilityReport
                                 report={graphState.final_report}
                                 fixes={graphState.suggested_fixes}
-                                onApplyFix={handleApplyFix}
-                                onRunDast={() => {}} // No longer manual
-                                appliedFixes={appliedFixes}
+                                appliedFixes={appliedFixes} // Just for visual indication if we keep it
                                 graphState={graphState}
-                                onRegenerateFixes={handleRegenerateFixes}
-                                onFinish={handleFinish}
                                 onDownload={handleDownload}
-                                exploitSucceeded={exploitSucceeded}
+                                prUrl={prUrl}
                             />
                         }
                     />
                 </div>
             )}
 
-            {isModalOpen && hasReport && graphState.final_report && (
+            {isModalOpen && graphState.final_report && (
                  <FinalReportModal report={graphState.final_report} onClose={() => dispatch({ type: 'SET_IS_MODAL_OPEN', payload: false })} />
             )}
         </div>

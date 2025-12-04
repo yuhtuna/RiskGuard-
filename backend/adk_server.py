@@ -83,7 +83,8 @@ def github_login() -> Dict[str, Any]:
 @cross_origin()
 def start_full_scan() -> Response:
     """
-    Accepts repo details, clones it, runs SAST, Auto-Fixes, Deploys, and runs DAST.
+    Accepts repo details, clones it, runs SAST, Auto-Fixes, Deploys, runs DAST,
+    and finally Automatically Submits a PR.
     This is the Autonomous Self-Healing Loop.
     """
     data = request.get_json()
@@ -144,7 +145,7 @@ def start_full_scan() -> Response:
 
         if not fixes:
              yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'No vulnerabilities requiring fixes found.', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
-             # Optionally verify "Clean" state with DAST here too, but for now we might stop or skip to report
+             # No fixes needed, so we stop here.
              yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
              return
 
@@ -223,18 +224,49 @@ def start_full_scan() -> Response:
         if not SKIP_GCP_DEPLOYMENT:
              destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
 
-        # 9. Final Report
-        dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
-        confirmed_vulns = [v for v in dast_vulnerabilities if v.get("status") == "SUCCESS"]
+        # 9. Auto-Submit PR
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Auto-submitting Pull Request to GitHub...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
         
-        status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "SECURE_VERIFIED"
-        
-        final_report = {
-            "status": status,
-            "summary": f"Autonomous scan complete. {len(fixes)} fixes applied. {len(confirmed_vulns)} issues remain exploitable."
-        }
-        scan_state["final_report"] = final_report
-        yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
+        try:
+            # Push changes
+            push_changes(local_repo_path, token, branch_name)
+
+            # Generate PR details
+            vulnerabilities = sast_report.get("vulnerabilities", [])
+            pr_details = generate_pr_details(vulnerabilities)
+
+            repo_full_name = "/".join(repo_url.rstrip(".git").split("/")[-2:])
+
+            client = GitHubClient(token=token)
+            pr_url, msg = client.create_pull_request(
+                repo_full_name,
+                branch_name,
+                default_branch,
+                pr_details["title"],
+                pr_details["body"]
+            )
+
+            if pr_url:
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Pull Request created successfully: {pr_url}', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+
+                # Final Report with PR URL
+                dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
+                confirmed_vulns = [v for v in dast_vulnerabilities if v.get("status") == "SUCCESS"]
+                status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "SECURE_VERIFIED"
+
+                final_report = {
+                    "status": status,
+                    "summary": f"Autonomous scan complete. PR Created.",
+                    "pr_url": pr_url
+                }
+                scan_state["final_report"] = final_report
+                yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
+            else:
+                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed to create PR: {msg}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed during PR submission: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
 
     response = Response(generate_autonomous_events(), mimetype='text/event-stream')
@@ -247,6 +279,7 @@ def start_full_scan() -> Response:
 def submit_pr() -> Dict[str, Any]:
     """
     Pushes the fix branch and creates a Pull Request.
+    (Kept for backward compatibility or manual override if needed)
     """
     data = request.get_json()
     current_graph_state = data.get('graph_state', {})
@@ -269,6 +302,8 @@ def submit_pr() -> Dict[str, Any]:
         pr_details = generate_pr_details(vulnerabilities)
 
         # Extract repo name from URL or state
+        # repo_url example: https://github.com/owner/repo.git or https://github.com/owner/repo
+        # We need "owner/repo"
         repo_full_name = "/".join(repo_url.rstrip(".git").split("/")[-2:])
 
         client = GitHubClient(token=token)
@@ -311,3 +346,48 @@ def download_fixed_code() -> Any:
         return jsonify({"data": base64.b64encode(zip_content).decode('utf-8')})
     except Exception as e:
         return jsonify({"error": f"Failed to create zip archive: {str(e)}"}), 500
+
+@app.route('/api/regenerate-fixes', methods=['POST'])
+@cross_origin()
+def regenerate_fixes_endpoint() -> Response:
+    """
+    Regenerates fixes based on the current SAST report and DAST results.
+    """
+    # Reuse existing logic but ensure it fits the new flow if needed
+    # For now, it's mostly same generation logic
+    return regenerate_fixes_logic()
+
+def regenerate_fixes_logic():
+    data = request.get_json()
+    current_graph_state = data.get('graph_state', {})
+    scan_state.update(current_graph_state)
+
+    def generate_fixes_events():
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Regenerating fixes...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+
+        dast_report = scan_state.get("dast_report")
+        sast_report = scan_state["sast_report"]
+
+        if dast_report:
+             # Logic to filter and improve fixes
+             fixes = generate_fixes_with_fallback(
+                sast_report.get('vulnerabilities', []),
+                scan_state["local_repo_path"],
+                dast_report
+             )
+        else:
+             fixes = generate_fixes(sast_report, scan_state["local_repo_path"])
+
+        scan_state["suggested_fixes"] = fixes
+        scan_state["dast_report"] = None # Reset DAST for next run
+
+        yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes, 'dast_report': None}})}\n\n"
+        yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"
+
+    response = Response(generate_fixes_events(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=False)
