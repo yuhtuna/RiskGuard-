@@ -100,10 +100,20 @@ Issue: {flaw_description}
                     lines = lines[:-1]
                 fixed_code = "\n".join(lines)
 
+            # Aggregate educational info
+            educational_info = []
+            for v in file_vulns:
+                educational_info.append({
+                    "type": v.get('vulnerability_type', v.get('type', 'Unknown')),
+                    "explanation": v.get('explanation', 'No explanation provided.'),
+                    "remediation": v.get('remediation', 'No remediation provided.')
+                })
+
             suggested_fixes.append({
                 'file_path': relative_path,
                 'description': f"Fixed {len(file_vulns)} vulnerabilities in {relative_path}",
-                'fixed_content': fixed_code  # Use 'fixed_content' instead of 'patch'
+                'fixed_content': fixed_code,
+                'educational_info': educational_info
             })
 
         except FileNotFoundError:

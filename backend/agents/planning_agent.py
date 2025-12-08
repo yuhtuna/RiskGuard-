@@ -69,17 +69,20 @@ def generate_pr_details(vulnerabilities: list) -> dict:
     """
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.7)
     prompt = PromptTemplate.from_template("""
-You are a security engineer creating a Pull Request.
-The following vulnerabilities have been fixed in this update:
+You are a Senior Security Engineer submitting a critical patch.
+The following vulnerabilities have been fixed:
 {vulnerabilities}
 
-Generate a concise but descriptive Title and a detailed Body for the Pull Request.
-The Body should list the vulnerabilities fixed and explain the security impact.
+Generate a PR Title and Description in an "Executive Summary" style.
+It must include:
+1. **Executive Summary**: High-level impact statement.
+2. **Changes**: Technical details of what was fixed.
+3. **Verification**: How the fixes were verified (mention Automated SAST/DAST).
 
 Return ONLY a valid JSON object with this exact structure:
 {{
-  "title": "Security Fix: [Summary of Fixes]",
-  "body": "## Fixed Vulnerabilities\\n\\n* **[Vuln Type]**: [Description]\\n\\n..."
+  "title": "fix(security): [Concise Summary]",
+  "body": "## Executive Summary\\n[Text]\\n\\n## Changes\\n[Text]\\n\\n## Verification\\n[Text]"
 }}
 """)
 
@@ -104,3 +107,29 @@ Return ONLY a valid JSON object with this exact structure:
             "title": "Security Fixes",
             "body": "Fixed detected vulnerabilities."
         }
+
+def generate_commit_message(fixes: list) -> str:
+    """
+    Generates a Conventional Commit message based on the applied fixes.
+    """
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.5)
+    prompt = PromptTemplate.from_template("""
+You are a Senior Software Engineer following Conventional Commits standards.
+Based on the following list of applied security fixes, generate a single, concise commit message.
+The message should follow the format: `type(scope): description`.
+
+Fixes Applied:
+{fixes}
+
+Examples:
+- fix(auth): sanitize input in login.py to prevent SQLi
+- fix(deps): update vulnerable dependency requests
+- chore(security): rotate hardcoded API keys
+
+Return ONLY the commit message string (no quotes, no extra text).
+""")
+
+    chain = prompt | llm | StrOutputParser()
+
+    response = chain.invoke({"fixes": str(fixes)})
+    return response.strip().replace('"', '').replace("`", "")

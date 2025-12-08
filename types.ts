@@ -14,7 +14,14 @@ export interface LogEntry {
     timestamp: string;
 }
 
-export type SastFinding = { file: string; line: number; flaw: string; vulnerability_type: string };
+export type SastFinding = {
+    file: string;
+    line: number;
+    flaw: string;
+    vulnerability_type: string;
+    explanation?: string;
+    remediation?: string;
+};
 export type DastFinding = { status: 'SUCCESS' | 'FAILURE'; proof_of_exploit: string | null };
 
 export type FinalReport = {
@@ -29,10 +36,18 @@ export type FinalReport = {
     message: string;
 } | null;
 
+export type EducationalInfo = {
+    type: string;
+    explanation: string;
+    remediation: string;
+};
+
 export type SuggestedFix = {
     file_path: string;
     description: string;
-    patch: string;
+    patch?: string;
+    fixed_content?: string;
+    educational_info?: EducationalInfo[];
 };
 
 export interface HASTGraphState {

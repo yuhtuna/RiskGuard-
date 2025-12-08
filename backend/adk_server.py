@@ -15,7 +15,7 @@ from flask import Flask, request, jsonify, Response, send_from_directory
 from flask_cors import CORS, cross_origin
 from flask_swagger_ui import get_swaggerui_blueprint
 
-from agents.planning_agent import create_attack_plan, generate_pr_details
+from agents.planning_agent import create_attack_plan, generate_pr_details, generate_commit_message
 from agents.fixer_agent import generate_fixes
 from agents.sast_agent import run_sast_scan
 from agents.dast_agent import run_dast_scan
@@ -96,7 +96,7 @@ def start_full_scan() -> Response:
         return jsonify({'error': 'repo_url not provided'}), 400
     
     def generate_autonomous_events():
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
 
         # Create a unique temp directory
         import uuid
@@ -113,44 +113,50 @@ def start_full_scan() -> Response:
         scan_state["default_branch"] = default_branch
         
         # 1. Clone Repo
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Cloning repository {repo_url}...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Cloning repository {repo_url}...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         
         try:
             clone_repository(repo_url, local_repo_path, token)
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Repository cloned successfully', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': 'Repository cloned successfully', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Failed to clone repository: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Failed to clone repository: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
             return
 
         # 2. Dockerfile Check/Generation
         try:
             dockerfile_path, _ = generate_dockerfile(local_repo_path)
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile validated/generated at {dockerfile_path}', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile validated/generated at {dockerfile_path}', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile generation failed: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile generation failed: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
             return
 
         # 3. SAST Scan
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'active'}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Scanning code for vulnerabilities...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         sast_report = run_sast_scan(local_repo_path)
         scan_state["sast_report"] = sast_report
+
+        # Inject simulated thought
+        vuln_count = len(sast_report.get('vulnerabilities', []))
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': f'I found {vuln_count} vulnerabilities. Analyzing dependency graph to formulate safe patches...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+
         yield f"data: {json.dumps({'type': 'state', 'payload': {'sast_report': sast_report}})}\n\n"
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'success'}})}\n\n"
 
         # 4. Generate Fixes
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'Generating fixes for detected vulnerabilities...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'Generating fixes for detected vulnerabilities...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         fixes = generate_fixes(sast_report, local_repo_path)
         scan_state["suggested_fixes"] = fixes
         yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
 
         if not fixes:
-             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'No vulnerabilities requiring fixes found.', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'No vulnerabilities requiring fixes found.', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
              # No fixes needed, so we stop here.
              yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
              return
 
         # 5. Auto-Apply Fixes (Self-Healing)
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': 'Auto-applying fixes to codebase...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': 'Auto-applying fixes to codebase...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
 
         timestamp = int(time.time())
         branch_name = f"riskguard-auto-fix-{timestamp}"
@@ -170,11 +176,15 @@ def start_full_scan() -> Response:
                     f.write(fixed_content)
                 applied_count += 1
 
-            commit_changes(local_repo_path, "Auto-applied security fixes by RiskGuard")
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Applied {applied_count} fixes and committed to branch {branch_name}', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+            # Generate semantic commit message
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': 'Generating semantic commit message...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+            commit_msg = generate_commit_message(fixes)
+            commit_changes(local_repo_path, commit_msg)
+
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Applied {applied_count} fixes and committed with message: "{commit_msg}"', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
 
         except Exception as e:
-             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Failed to auto-apply fixes: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Failed to auto-apply fixes: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
              return
 
         # 6. Deploy to Sandbox
@@ -186,13 +196,13 @@ def start_full_scan() -> Response:
         if SKIP_GCP_DEPLOYMENT:
             service_url = "http://localhost:8000"
             service_name = "local-testing"
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         else:
             for item in deploy_to_sandbox(local_repo_path, GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME):
                 if isinstance(item, tuple) and len(item) == 2:
                     service_url, service_name = item
                 else:
-                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+                    yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         
         scan_state["sandbox_url"] = service_url
         scan_state["service_name"] = service_name
@@ -200,7 +210,7 @@ def start_full_scan() -> Response:
 
         # 7. Plan & Run DAST
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'plan_attack', 'status': 'active'}})}\n\n"
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Planning DAST verification...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'plan_attack', 'log': {'message': 'Planning DAST verification...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         
         attack_plan = {"steps": []}
         try:
@@ -225,7 +235,7 @@ def start_full_scan() -> Response:
              destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
 
         # 9. Auto-Submit PR
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Auto-submitting Pull Request to GitHub...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Auto-submitting Pull Request to GitHub...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         
         try:
             # Push changes
@@ -247,7 +257,7 @@ def start_full_scan() -> Response:
             )
 
             if pr_url:
-                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Pull Request created successfully: {pr_url}', 'type': 'success', 'timestamp': time.time()}}})}\n\n"
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Pull Request created successfully: {pr_url}', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
 
                 # Final Report with PR URL
                 dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
@@ -262,10 +272,10 @@ def start_full_scan() -> Response:
                 scan_state["final_report"] = final_report
                 yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
             else:
-                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed to create PR: {msg}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed to create PR: {msg}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed during PR submission: {str(e)}', 'type': 'failure', 'timestamp': time.time()}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed during PR submission: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
 
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
 
@@ -363,7 +373,7 @@ def regenerate_fixes_logic():
     scan_state.update(current_graph_state)
 
     def generate_fixes_events():
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Regenerating fixes...', 'type': 'info', 'timestamp': time.time()}}})}\n\n"
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Regenerating fixes...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
 
         dast_report = scan_state.get("dast_report")
         sast_report = scan_state["sast_report"]

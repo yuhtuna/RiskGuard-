@@ -58,7 +58,9 @@ IMPORTANT: Return ONLY a valid JSON object in this EXACT format (no markdown, no
       "line": 10,
       "type": "SQL Injection",
       "severity": "High",
-      "description": "Brief description of the vulnerability"
+      "description": "Brief description of the vulnerability",
+      "explanation": "A brief educational explanation of the attack vector (What is this?)",
+      "remediation": "A conceptual guide on how to prevent it (How to fix?)"
     }}
   ],
   "summary": "Found X vulnerabilities"
