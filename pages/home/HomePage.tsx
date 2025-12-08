@@ -34,6 +34,7 @@ const HomePage: React.FC = () => {
     });
     const [githubAuth, setGithubAuth] = useState<{username: string, token: string} | null>(null);
     const [repos, setRepos] = useState<any[]>([]);
+    const [isCreatingPR, setIsCreatingPR] = useState(false);
 
     const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -166,6 +167,69 @@ const HomePage: React.FC = () => {
         }
     }, [graphState]);
 
+    const handleCreatePR = useCallback(async () => {
+        setIsCreatingPR(true);
+        dispatch({
+            type: 'ADD_ACTION_LOG',
+            payload: {
+                key: 'submit_pr',
+                title: 'Creating Pull Request',
+                status: 'active',
+                detailLogs: [{ message: 'Submitting PR to GitHub...', type: 'info', timestamp: (Date.now() / 1000).toString() }],
+            },
+        });
+
+        try {
+            const response = await fetch('/api/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ graph_state: graphState }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create Pull Request');
+            }
+
+            const data = await response.json();
+
+            // Dispatch update to graph state with PR URL
+            dispatch({
+                type: 'UPDATE_GRAPH_STATE',
+                payload: {
+                     final_report: {
+                         ...graphState.final_report,
+                         pr_url: data.pr_url,
+                         summary: 'Autonomous scan complete. PR Created.'
+                     }
+                }
+            });
+
+             dispatch({
+                type: 'UPDATE_ACTION_LOG',
+                payload: {
+                    key: 'submit_pr',
+                    status: 'success',
+                    detailLogs: [{ message: `PR created successfully: ${data.pr_url}`, type: 'success', timestamp: (Date.now() / 1000).toString() }],
+                },
+            });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            dispatch({ type: 'SET_SCAN_ERROR', payload: `PR Creation failed: ${errorMessage}` });
+             dispatch({
+                type: 'UPDATE_ACTION_LOG',
+                payload: {
+                    key: 'submit_pr',
+                    status: 'failure',
+                    detailLogs: [{ message: `Failed to create PR: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }],
+                },
+            });
+        } finally {
+            setIsCreatingPR(false);
+        }
+    }, [graphState]);
+
     const activeLog = actionLogs.length > 0 ? actionLogs[actionLogs.length - 1] : undefined;
     const historyLogs = actionLogs.length > 1 ? actionLogs.slice(0, actionLogs.length - 1).reverse() : [];
 
@@ -213,6 +277,8 @@ const HomePage: React.FC = () => {
                                 graphState={graphState}
                                 onDownload={handleDownload}
                                 prUrl={prUrl}
+                                onCreatePR={handleCreatePR}
+                                isCreatingPR={isCreatingPR}
                             />
                         }
                     />

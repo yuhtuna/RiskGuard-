@@ -16,11 +16,20 @@ const mockFix = {
     ]
 };
 
+const mockGraphState = {
+    pr_details: {
+        title: 'fix(security): Fix SQL Injection',
+        body: '## Executive Summary\nFixed critical SQL Injection in auth.py.\n\n## Changes\n- Parameterized query in login flow.\n\n## Verification\n- SAST/DAST verified.'
+    }
+};
+
 const App = () => {
     return (
-        <div className="p-10 h-screen w-screen bg-gray-100 dark:bg-gray-900">
+        <div className="p-10 h-screen w-screen bg-gray-100 dark:bg-gray-900 overflow-y-auto">
             <VulnerabilityReport
                 fixes={[mockFix]}
+                graphState={mockGraphState}
+                onCreatePR={() => alert('PR Created!')}
             />
         </div>
     );

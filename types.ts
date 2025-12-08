@@ -59,6 +59,7 @@ export interface HASTGraphState {
     attack_plan: { target_url: string; vulnerability_type: string; payload: string }[];
     dast_report: { vulnerabilities: DastFinding[]; summary: string };
     final_report: FinalReport;
+    pr_details?: { title: string; body: string };
 }
 
 export type Theme = 'light' | 'dark';

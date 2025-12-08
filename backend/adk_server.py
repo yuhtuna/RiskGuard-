@@ -234,50 +234,32 @@ def start_full_scan() -> Response:
         if not SKIP_GCP_DEPLOYMENT:
              destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
 
-        # 9. Auto-Submit PR
-        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Auto-submitting Pull Request to GitHub...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+        # 9. Prepare for PR (Wait for User)
+        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Generating PR details and waiting for approval...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         
         try:
-            # Push changes
-            push_changes(local_repo_path, token, branch_name)
-
-            # Generate PR details
+            # Generate PR details but don't submit yet
             vulnerabilities = sast_report.get("vulnerabilities", [])
             pr_details = generate_pr_details(vulnerabilities)
 
-            repo_full_name = "/".join(repo_url.rstrip(".git").split("/")[-2:])
+            scan_state["pr_details"] = pr_details
 
-            client = GitHubClient(token=token)
-            pr_url, msg = client.create_pull_request(
-                repo_full_name,
-                branch_name,
-                default_branch,
-                pr_details["title"],
-                pr_details["body"]
-            )
+            dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
+            confirmed_vulns = [v for v in dast_vulnerabilities if v.get("status") == "SUCCESS"]
+            status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "SECURE_VERIFIED"
 
-            if pr_url:
-                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Pull Request created successfully: {pr_url}', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
+            final_report = {
+                "status": status,
+                "summary": "Scan complete. Waiting for user approval to create PR.",
+                "pr_url": None
+            }
+            scan_state["final_report"] = final_report
 
-                # Final Report with PR URL
-                dast_vulnerabilities = dast_report.get("vulnerabilities", []) if 'dast_report' in locals() and dast_report else []
-                confirmed_vulns = [v for v in dast_vulnerabilities if v.get("status") == "SUCCESS"]
-                status = "VULNERABILITY_CONFIRMED" if confirmed_vulns else "SECURE_VERIFIED"
-
-                final_report = {
-                    "status": status,
-                    "summary": f"Autonomous scan complete. PR Created.",
-                    "pr_url": pr_url
-                }
-                scan_state["final_report"] = final_report
-                yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report}})}\n\n"
-            else:
-                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed to create PR: {msg}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'state', 'payload': {'final_report': final_report, 'pr_details': pr_details}})}\n\n"
+            yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'waiting_for_approval'}})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed during PR submission: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'finished'}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': f'Failed during PR preparation: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
 
     response = Response(generate_autonomous_events(), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
@@ -289,8 +271,8 @@ def start_full_scan() -> Response:
 def submit_pr() -> Dict[str, Any]:
     """
     Pushes the fix branch and creates a Pull Request.
-    (Kept for backward compatibility or manual override if needed)
     """
+    print("[API] /api/finish called. Submitting PR...")
     data = request.get_json()
     current_graph_state = data.get('graph_state', {})
     scan_state.update(current_graph_state)
@@ -300,16 +282,21 @@ def submit_pr() -> Dict[str, Any]:
     repo_url = scan_state.get("repo_url")
     default_branch = scan_state.get("default_branch", "main")
 
+    # Debug logging to trace state issues
+    print(f"[API] Context: branch={branch_name}, repo={repo_url}, has_token={'yes' if token else 'no'}")
+
     if not branch_name or not token:
-        return jsonify({"error": "Missing branch or token information"}), 400
+        return jsonify({"error": "Missing branch or token information. Server state might have been lost."}), 400
 
     try:
         # Push Changes
         push_changes(scan_state["local_repo_path"], token, branch_name)
 
-        # Generate PR Details
-        vulnerabilities = scan_state.get("sast_report", {}).get("vulnerabilities", [])
-        pr_details = generate_pr_details(vulnerabilities)
+        # Get PR Details (from state or regenerate)
+        pr_details = scan_state.get("pr_details")
+        if not pr_details:
+             vulnerabilities = scan_state.get("sast_report", {}).get("vulnerabilities", [])
+             pr_details = generate_pr_details(vulnerabilities)
 
         # Extract repo name from URL or state
         # repo_url example: https://github.com/owner/repo.git or https://github.com/owner/repo
