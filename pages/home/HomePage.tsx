@@ -39,6 +39,8 @@ const HomePage: React.FC = () => {
     const eventSourceRef = useRef<EventSource | null>(null);
 
     const actionMap = {
+        'file_upload': 'Cloning Repository',
+        'generate_dockerfile': 'Generate Dockerfile',
         'deploy_sandbox': 'Deploy Sandbox Environment',
         'redeploy_sandbox': 'Re-deploy Patched Code',
         'sast_scan': 'Run Static Code Analysis on Source Code',
@@ -238,7 +240,7 @@ const HomePage: React.FC = () => {
     const showDashboard = isRunning || graphState.sandbox_url || graphState.sast_report;
 
     return (
-        <div className="h-screen overflow-hidden bg-cream-50/90 dark:bg-navy-900/90 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500">
+        <div className="h-screen overflow-hidden bg-cream-50/70 dark:bg-navy-900/80 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500 relative">
             <AnimatedBackground />
             <Header theme={theme} onToggleTheme={toggleTheme} />
 

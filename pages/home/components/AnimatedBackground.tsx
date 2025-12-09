@@ -14,8 +14,12 @@ const AnimatedBackground: React.FC = () => {
         let height = canvas.height = window.innerHeight;
 
         const particles: Particle[] = [];
-        const particleCount = 60;
-        const connectionDistance = 150;
+        // Increased count for better density
+        const particleCount = 80;
+        // Increased connection distance
+        const connectionDistance = 250;
+
+        let time = 0;
 
         class Particle {
             x: number;
@@ -23,28 +27,40 @@ const AnimatedBackground: React.FC = () => {
             vx: number;
             vy: number;
             size: number;
+            baseX: number;
+            baseY: number;
+            offset: number;
 
             constructor() {
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.vx = (Math.random() - 0.5) * 0.5;
-                this.vy = (Math.random() - 0.5) * 0.5;
-                this.size = Math.random() * 2 + 1;
+                this.baseX = this.x;
+                this.baseY = this.y;
+                // Slower base movement
+                this.vx = (Math.random() - 0.5) * 0.2;
+                this.vy = (Math.random() - 0.5) * 0.2;
+                // Bigger particles
+                this.size = Math.random() * 3 + 2;
+                this.offset = Math.random() * 100;
             }
 
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
+                // Add wave/rotation motion
+                this.x += this.vx + Math.sin(time * 0.001 + this.offset) * 0.2;
+                this.y += this.vy + Math.cos(time * 0.001 + this.offset) * 0.2;
 
-                if (this.x < 0 || this.x > width) this.vx *= -1;
-                if (this.y < 0 || this.y > height) this.vy *= -1;
+                // Wrap around screen
+                if (this.x < -50) this.x = width + 50;
+                if (this.x > width + 50) this.x = -50;
+                if (this.y < -50) this.y = height + 50;
+                if (this.y > height + 50) this.y = -50;
             }
 
             draw() {
                 if (!ctx) return;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(100, 200, 255, 0.5)';
+                ctx.fillStyle = 'rgba(100, 150, 255, 0.4)';
                 ctx.fill();
             }
         }
@@ -57,8 +73,10 @@ const AnimatedBackground: React.FC = () => {
             if (!ctx) return;
             ctx.clearRect(0, 0, width, height);
 
+            time++;
+
             // Draw connections first
-            ctx.lineWidth = 0.5;
+            ctx.lineWidth = 0.8;
             for (let i = 0; i < particleCount; i++) {
                 for (let j = i + 1; j < particleCount; j++) {
                     const dx = particles[i].x - particles[j].x;
@@ -67,7 +85,7 @@ const AnimatedBackground: React.FC = () => {
 
                     if (distance < connectionDistance) {
                         ctx.beginPath();
-                        ctx.strokeStyle = `rgba(100, 200, 255, ${1 - distance / connectionDistance})`;
+                        ctx.strokeStyle = `rgba(100, 150, 255, ${0.15 * (1 - distance / connectionDistance)})`;
                         ctx.moveTo(particles[i].x, particles[i].y);
                         ctx.lineTo(particles[j].x, particles[j].y);
                         ctx.stroke();
@@ -98,7 +116,7 @@ const AnimatedBackground: React.FC = () => {
     return (
         <canvas
             ref={canvasRef}
-            className="fixed top-0 left-0 w-full h-full -z-10 pointer-events-none opacity-40 dark:opacity-20"
+            className="fixed top-0 left-0 w-full h-full pointer-events-none z-0"
         />
     );
 };

@@ -64,8 +64,8 @@ export function useSse(dispatch: React.Dispatch<Action>, actionMap: Record<strin
                                         dispatch({ type: 'SET_GRAPH_STATE', payload });
                                         break;
                                     case 'control':
-                                        if (payload.status === 'finished' || payload.status === 'paused') {
-                                            console.log('Control message - setting isRunning to false');
+                                        if (payload.status === 'finished' || payload.status === 'paused' || payload.status === 'waiting_for_approval') {
+                                            console.log(`Control message: ${payload.status} - setting isRunning to false`);
                                             dispatch({ type: 'SET_IS_RUNNING', payload: false });
                                             dispatch({ type: 'SET_ACTIVE_NODE', payload: null });
                                         }

@@ -123,11 +123,14 @@ def start_full_scan() -> Response:
             return
 
         # 2. Dockerfile Check/Generation
+        yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'generate_dockerfile', 'status': 'active'}})}\n\n"
         try:
             dockerfile_path, _ = generate_dockerfile(local_repo_path)
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile validated/generated at {dockerfile_path}', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'generate_dockerfile', 'status': 'success'}})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_dockerfile', 'log': {'message': f'Dockerfile generation failed: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
+            yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'generate_dockerfile', 'status': 'failure'}})}\n\n"
             return
 
         # 3. SAST Scan

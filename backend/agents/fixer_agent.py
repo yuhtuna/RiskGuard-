@@ -1,4 +1,5 @@
 import os
+import difflib
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -11,6 +12,9 @@ def generate_fixes(sast_report, local_repo_path: str, use_focused_context: bool 
     Generates suggested fixes for vulnerabilities found in the SAST report.
     RETURNS FULL FILE CONTENT instead of patches to avoid git apply errors.
     """
+    import langchain
+    langchain.verbose = False
+
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", temperature=0.3)
     prompt = PromptTemplate.from_template("""
 You are an expert security engineer. A security vulnerability has been detected in the following code.
@@ -100,6 +104,16 @@ Issue: {flaw_description}
                     lines = lines[:-1]
                 fixed_code = "\n".join(lines)
 
+            # Generate Unified Diff
+            diff = difflib.unified_diff(
+                original_code.splitlines(),
+                fixed_code.splitlines(),
+                fromfile=f"a/{relative_path}",
+                tofile=f"b/{relative_path}",
+                lineterm=""
+            )
+            diff_text = "\n".join(diff)
+
             # Aggregate educational info
             educational_info = []
             for v in file_vulns:
@@ -113,6 +127,7 @@ Issue: {flaw_description}
                 'file_path': relative_path,
                 'description': f"Fixed {len(file_vulns)} vulnerabilities in {relative_path}",
                 'fixed_content': fixed_code,
+                'diff': diff_text,
                 'educational_info': educational_info
             })
 

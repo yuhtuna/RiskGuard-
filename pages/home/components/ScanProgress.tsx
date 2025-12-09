@@ -156,9 +156,11 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
                     Audit Timeline
                 </h2>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-0 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
+            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
                 {steps.map((step, index) => (
-                    <Step key={step.key} step={step} isLast={index === steps.length - 1} />
+                    <div className="transition-transform duration-300 hover:scale-[1.02] hover:shadow-lg rounded-xl">
+                         <Step key={step.key} step={step} isLast={index === steps.length - 1} />
+                    </div>
                 ))}
                  {/* Spacer to ensure bottom content isn't cut off by rounding or shadows */}
                  <div className="h-4 w-full"></div>
