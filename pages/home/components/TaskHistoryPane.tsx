@@ -53,13 +53,13 @@ const HistoryRow: React.FC<{ log: ActionLog }> = ({ log }) => (
 
 const TaskHistoryPane: React.FC<TaskHistoryPaneProps> = ({ logs }) => {
     if (!logs || logs.length === 0) {
-        return null; // Or return a placeholder if desired, but "empty" is fine for history
+        return null;
     }
 
     return (
         <div className="bg-white/60 dark:bg-navy-800/60 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-white/10 flex flex-col overflow-hidden h-full shadow-lg">
             <div className="px-4 py-2 border-b border-gray-100 dark:border-white/5 bg-white/20 dark:bg-navy-900/20">
-                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Task History</h3>
+                <h3 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Task History</h3>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600 scrollbar-track-transparent">
                 {logs.map((log) => (

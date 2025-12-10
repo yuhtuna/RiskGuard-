@@ -18,7 +18,7 @@ const Step: React.FC<{ step: ScanStep; isLast: boolean }> = ({ step, isLast }) =
             <div className="flex flex-col items-center mr-4 relative">
                 {/* Step Indicator Circle */}
                 <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold z-10 transition-all duration-500
+                    w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold z-10 transition-all duration-700 ease-in-out
                     ${step.status === 'complete'
                         ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110'
                         : step.status === 'active'
@@ -39,9 +39,9 @@ const Step: React.FC<{ step: ScanStep; isLast: boolean }> = ({ step, isLast }) =
 
                 {/* Vertical Line */}
                 {!isLast && (
-                    <div className="w-0.5 h-16 mt-0 relative overflow-hidden bg-gray-200 dark:bg-navy-700">
+                    <div className="w-0.5 h-full min-h-[4rem] mt-0 relative overflow-hidden bg-gray-200 dark:bg-navy-700 rounded-full">
                         {step.status === 'complete' && (
-                             <div className="absolute inset-0 bg-gradient-to-b from-green-500 to-emerald-600" />
+                             <div className="absolute inset-0 bg-gradient-to-b from-green-500 to-emerald-600 transition-all duration-1000 ease-in-out" />
                         )}
                         {step.status === 'active' && (
                             <div className="absolute inset-0 bg-gradient-to-b from-blue-500 to-cyan-400 animate-scanline" />
@@ -52,7 +52,7 @@ const Step: React.FC<{ step: ScanStep; isLast: boolean }> = ({ step, isLast }) =
 
             {/* Content Card */}
             <div className={`
-                flex-1 p-4 rounded-xl border transition-all duration-300 transform
+                flex-1 p-4 rounded-xl border transition-all duration-500 ease-out transform
                 ${step.status === 'active'
                     ? 'bg-white/90 dark:bg-navy-800/90 border-blue-500/30 shadow-lg scale-[1.02] translate-x-1 backdrop-blur-sm'
                     : step.status === 'complete'
@@ -125,10 +125,6 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         } else {
             status = 'upcoming';
         }
-
-        // Special case: if we are at the very beginning (no steps completed),
-        // the first step should be active, not the 0th index if lastCompletedIndex is -1.
-        // The logic above handles this: lastCompletedIndex = -1, index 0 is (0 == -1 + 1) -> active.
         
         let details: string | null = null;
         if (value !== null && value !== undefined) {
@@ -145,25 +141,20 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
         return { ...stepInfo, status, details };
     });
 
-    // Removed the skeleton loader block so the timeline is always visible
-    // The previous check `if (Object.keys(graphState).length <= 1)` caused it to hide
-    // until some state was populated. Now it will show the steps immediately.
-
     return (
         <div className="h-full flex flex-col w-full">
-            <div className="p-6 pb-2 flex-none">
+            <div className="p-6 pb-4 flex-none">
                  <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2 uppercase tracking-wide opacity-80">
                     Audit Timeline
                 </h2>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
+            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-8 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
                 {steps.map((step, index) => (
                     <div className="transition-transform duration-300 hover:scale-[1.02] hover:shadow-lg rounded-xl">
                          <Step key={step.key} step={step} isLast={index === steps.length - 1} />
                     </div>
                 ))}
-                 {/* Spacer to ensure bottom content isn't cut off by rounding or shadows */}
-                 <div className="h-4 w-full"></div>
+                 <div className="h-8 w-full"></div>
             </div>
         </div>
     );
