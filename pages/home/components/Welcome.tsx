@@ -26,8 +26,8 @@ const Welcome: React.FC = () => {
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                         Static Analysis
                     </div>
-                    <div className="px-3 py-1.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-xs font-semibold border border-purple-100 dark:border-purple-800 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                    <div className="px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-xs font-semibold border border-blue-100 dark:border-blue-800 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                         Dynamic Testing
                     </div>
                     <div className="px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300 text-xs font-semibold border border-emerald-100 dark:border-emerald-800 flex items-center gap-2">

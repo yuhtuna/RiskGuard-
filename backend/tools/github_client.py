@@ -74,5 +74,14 @@ class GitHubClient:
                  if pulls.totalCount > 0:
                      return pulls[0].html_url, "Updated existing PR"
 
+            # Handle "Validation Failed" (common when PR exists or no commits)
+            if "Validation Failed" in error_msg:
+                 errors = e.data.get('errors', [])
+                 for error in errors:
+                     if error.get('message', '').startswith('A pull request already exists'):
+                          pulls = repo.get_pulls(state='open', head=f"{repo.owner.login}:{head_branch}", base=base_branch)
+                          if pulls.totalCount > 0:
+                               return pulls[0].html_url, "Updated existing PR"
+
             logging.error(f"Failed to create PR: {error_msg}")
             return None, error_msg

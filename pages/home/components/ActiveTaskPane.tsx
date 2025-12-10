@@ -41,10 +41,10 @@ const LogIcon: React.FC<{ status: string }> = ({ status }) => {
 
 const DetailLogEntry: React.FC<{ entry: LogEntry }> = ({ entry }) => (
     <div className={`flex gap-2 text-xs font-mono ${
-        entry.type === 'failure' ? 'text-red-500' :
-        entry.type === 'success' ? 'text-green-500' :
-        entry.type === 'agent' ? 'text-purple-500' :
-        'text-gray-500 dark:text-gray-400'
+        entry.type === 'failure' ? 'text-red-600 dark:text-red-400' :
+        entry.type === 'success' ? 'text-green-600 dark:text-green-400' :
+        entry.type === 'agent' ? 'text-blue-600 dark:text-blue-400' :
+        'text-gray-600 dark:text-gray-400'
     }`}>
         <span className="opacity-50">[{new Date(parseFloat(entry.timestamp) * 1000).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
         <span>{entry.message}</span>
@@ -71,8 +71,8 @@ const ActiveTaskPane: React.FC<ActiveTaskPaneProps> = ({ activeLog }) => {
 
     return (
         <div className="relative group flex-shrink-0 w-full">
-            {/* Glow effect */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+            {/* Glow effect - Changed from purple/blue to blue/cyan */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
 
             <div className="relative bg-white/80 dark:bg-navy-900/90 backdrop-blur-xl rounded-2xl p-5 shadow-xl border border-white/20 dark:border-navy-700/50">
                 <div className="flex items-start justify-between mb-2">
@@ -107,25 +107,25 @@ const ActiveTaskPane: React.FC<ActiveTaskPaneProps> = ({ activeLog }) => {
                     </button>
                 </div>
 
-                {/* Collapsible Console Output */}
+                {/* Collapsible Console Output - Dynamic Background */}
                 <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-64 opacity-100 mt-3' : 'max-h-0 opacity-0'}`}>
-                    <div className="bg-gray-950 rounded-lg p-3 font-mono text-[11px] overflow-y-auto max-h-48 border border-gray-800 shadow-inner scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                    <div className="bg-white dark:bg-gray-950 rounded-lg p-3 font-mono text-[11px] overflow-y-auto max-h-48 border border-gray-200 dark:border-gray-800 shadow-inner scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent">
                         {activeLog.detailLogs.map((entry, idx) => (
                             <DetailLogEntry key={idx} entry={entry} />
                         ))}
                             {activeLog.status === 'active' && (
-                            <div className="flex gap-2 text-blue-400 animate-pulse mt-1">
+                            <div className="flex gap-2 text-blue-600 dark:text-blue-400 animate-pulse mt-1">
                                 <span>&gt;</span>
-                                <span className="w-1.5 h-3 bg-blue-400"></span>
+                                <span className="w-1.5 h-3 bg-blue-600 dark:bg-blue-400"></span>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Progress Bar (Visual only) */}
+                {/* Progress Bar (Visual only) - Blue only */}
                 {activeLog.status === 'active' && (
                     <div className="mt-3 h-1 w-full bg-gray-200 dark:bg-navy-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 w-1/3 animate-[shimmer_2s_infinite]"></div>
+                        <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 w-1/3 animate-[shimmer_2s_infinite]"></div>
                     </div>
                 )}
             </div>
