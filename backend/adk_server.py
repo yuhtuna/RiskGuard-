@@ -20,6 +20,7 @@ from agents.fixer_agent import generate_fixes
 from agents.sast_agent import run_sast_scan
 from agents.dast_agent import run_dast_scan
 from tools.environment_manager import deploy_to_sandbox, destroy_sandbox
+from tools.vultr_manager import deploy_to_vultr, destroy_vultr_sandbox
 from tools.git_workspace import clone_repository, create_branch, commit_changes, push_changes
 from tools.dockerfile_generator import generate_dockerfile
 from tools.github_client import GitHubClient
@@ -46,6 +47,7 @@ GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
 GCP_REGION = os.environ.get("GCP_REGION", "us-central1")
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "your-gcs-bucket-name")
 SKIP_GCP_DEPLOYMENT = os.environ.get("SKIP_GCP_DEPLOYMENT", "true").lower() == "true"
+SANDBOX_PROVIDER = os.environ.get("SANDBOX_PROVIDER", "GCP").upper()
 
 # Use a unique temp directory per scan to avoid permission conflicts
 scan_state = {
@@ -200,7 +202,23 @@ def start_full_scan() -> Response:
             service_url = "http://localhost:8000"
             service_name = "local-testing"
             yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Skipping GCP deployment (local testing mode)', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+        elif SANDBOX_PROVIDER == "VULTR":
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': 'Pushing fix branch to remote for Vultr deployment...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+            try:
+                push_changes(local_repo_path, token, branch_name)
+
+                # Consume generator from vultr_manager
+                for item in deploy_to_vultr(repo_url, branch_name, token):
+                    if isinstance(item, tuple) and len(item) == 2:
+                        service_url, service_name = item
+                    else:
+                        yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': str(item), 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'deploy_sandbox', 'log': {'message': f'Vultr deployment failed: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"
+                yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'deploy_sandbox', 'status': 'failure'}})}\n\n"
+                return
         else:
+            # Default to GCP
             for item in deploy_to_sandbox(local_repo_path, GCP_PROJECT_ID, GCP_REGION, GCS_BUCKET_NAME):
                 if isinstance(item, tuple) and len(item) == 2:
                     service_url, service_name = item
@@ -235,7 +253,10 @@ def start_full_scan() -> Response:
 
         # 8. Cleanup
         if not SKIP_GCP_DEPLOYMENT:
-             destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
+            if SANDBOX_PROVIDER == "VULTR":
+                destroy_vultr_sandbox(service_name)
+            else:
+                destroy_sandbox(service_name, GCP_PROJECT_ID, GCP_REGION)
 
         # 9. Prepare for PR (Wait for User)
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'submit_pr', 'log': {'message': 'Generating PR details and waiting for approval...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
