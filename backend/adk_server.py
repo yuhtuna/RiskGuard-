@@ -16,7 +16,7 @@ from flask_cors import CORS, cross_origin
 from flask_swagger_ui import get_swaggerui_blueprint
 
 from agents.planning_agent import create_attack_plan, generate_pr_details, generate_commit_message
-from agents.fixer_agent import generate_fixes
+from agents.fixer_agent import generate_fixes, generate_fixes_with_fallback
 from agents.sast_agent import run_sast_scan
 from agents.dast_agent import run_dast_scan
 from tools.environment_manager import deploy_to_sandbox, destroy_sandbox
@@ -186,7 +186,8 @@ def start_full_scan() -> Response:
             commit_msg = generate_commit_message(fixes)
             commit_changes(local_repo_path, commit_msg)
 
-            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Applied {applied_count} fixes and committed with message: "{commit_msg}"', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
+            success_msg = f'Applied {applied_count} fixes and committed with message: "{commit_msg}"'
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': success_msg, 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
 
         except Exception as e:
              yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'apply_fix', 'log': {'message': f'Failed to auto-apply fixes: {str(e)}', 'type': 'failure', 'timestamp': str(time.time())}}})}\n\n"

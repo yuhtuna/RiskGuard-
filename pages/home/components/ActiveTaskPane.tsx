@@ -125,7 +125,10 @@ const ActiveTaskPane: React.FC<ActiveTaskPaneProps> = ({ activeLog }) => {
                 {/* Progress Bar (Visual only) - Blue only */}
                 {activeLog.status === 'active' && (
                     <div className="mt-3 h-1 w-full bg-gray-200 dark:bg-navy-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 w-1/3 animate-[shimmer_2s_infinite]"></div>
+                        <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full animate-pulse"
+                            style={{ width: '100%' }}
+                        />
                     </div>
                 )}
             </div>

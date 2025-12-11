@@ -197,7 +197,7 @@ const HomePage: React.FC = () => {
 
             // Dispatch update to graph state with PR URL
             dispatch({
-                type: 'UPDATE_GRAPH_STATE',
+                type: 'SET_GRAPH_STATE',
                 payload: {
                      final_report: {
                          ...graphState.final_report,
@@ -212,7 +212,13 @@ const HomePage: React.FC = () => {
                 payload: {
                     key: 'submit_pr',
                     status: 'success',
-                    detailLogs: [{ message: `PR created successfully: ${data.pr_url}`, type: 'success', timestamp: (Date.now() / 1000).toString() }],
+                },
+            });
+             dispatch({
+                type: 'ADD_DETAIL_LOG',
+                payload: {
+                    actionKey: 'submit_pr',
+                    log: { message: `PR created successfully: ${data.pr_url}`, type: 'success', timestamp: (Date.now() / 1000).toString() }
                 },
             });
 
@@ -224,7 +230,13 @@ const HomePage: React.FC = () => {
                 payload: {
                     key: 'submit_pr',
                     status: 'failure',
-                    detailLogs: [{ message: `Failed to create PR: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }],
+                },
+            });
+             dispatch({
+                type: 'ADD_DETAIL_LOG',
+                payload: {
+                    actionKey: 'submit_pr',
+                    log: { message: `Failed to create PR: ${errorMessage}`, type: 'failure', timestamp: (Date.now() / 1000).toString() }
                 },
             });
         } finally {
@@ -232,8 +244,8 @@ const HomePage: React.FC = () => {
         }
     }, [graphState]);
 
-    const activeLog = actionLogs.length > 0 ? actionLogs[actionLogs.length - 1] : undefined;
-    const historyLogs = actionLogs.length > 1 ? actionLogs.slice(0, actionLogs.length - 1).reverse() : [];
+    const activeLog = actionLogs.at(-1);
+    const historyLogs = actionLogs.length > 1 ? actionLogs.slice(0, -1).reverse() : [];
 
     // Determine if PR has been generated
     const prUrl = graphState.final_report?.pr_url;

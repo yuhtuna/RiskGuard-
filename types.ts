@@ -26,14 +26,24 @@ export type DastFinding = { status: 'SUCCESS' | 'FAILURE'; proof_of_exploit: str
 
 export type FinalReport = {
     status: 'VULNERABILITY_CONFIRMED';
-    dastReport: DastFinding[];
-    sastReport: SastFinding[];
+    dastReport?: DastFinding[];
+    sastReport?: SastFinding[];
+    pr_url?: string;
+    summary?: string;
 } | {
     status: 'POTENTIAL_VULNERABILITY';
-    sastReport: SastFinding[];
+    sastReport?: SastFinding[];
+    pr_url?: string;
+    summary?: string;
 } | {
     status: 'BUILD_FAILED';
     message: string;
+    pr_url?: string;
+    summary?: string;
+} | {
+    status: 'SECURE_VERIFIED';
+    pr_url?: string;
+    summary?: string;
 } | null;
 
 export type EducationalInfo = {
@@ -46,6 +56,7 @@ export type SuggestedFix = {
     file_path: string;
     description: string;
     patch?: string;
+    diff?: string;
     fixed_content?: string;
     educational_info?: EducationalInfo[];
 };

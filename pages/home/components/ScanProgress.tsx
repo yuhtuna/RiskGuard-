@@ -84,9 +84,10 @@ const Step: React.FC<{ step: ScanStep; isLast: boolean }> = ({ step, isLast }) =
 
                 {step.status === 'active' && (
                     <div className="mt-2 h-1.5 w-full bg-gray-100 dark:bg-navy-900 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 w-1/2 animate-[shimmer_1.5s_infinite] relative">
-                             <div className="absolute inset-0 bg-white/30 skew-x-12 animate-[shimmer_1s_infinite]" />
-                        </div>
+                        <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full animate-pulse"
+                            style={{ width: '100%' }}
+                        />
                     </div>
                 )}
             </div>
@@ -150,8 +151,8 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ graphState }) => {
             </div>
             <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-8 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-navy-600">
                 {steps.map((step, index) => (
-                    <div className="transition-transform duration-300 hover:scale-[1.02] hover:shadow-lg rounded-xl">
-                         <Step key={step.key} step={step} isLast={index === steps.length - 1} />
+                    <div key={step.key} className="transition-transform duration-300 hover:scale-[1.02] hover:shadow-lg rounded-xl">
+                         <Step step={step} isLast={index === steps.length - 1} />
                     </div>
                 ))}
                  <div className="h-8 w-full"></div>
