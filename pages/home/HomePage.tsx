@@ -254,7 +254,7 @@ const HomePage: React.FC = () => {
     return (
         <div className="h-screen overflow-hidden bg-cream-50/70 dark:bg-navy-900/80 text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-500 relative">
             <AnimatedBackground />
-            <Header theme={theme} onToggleTheme={toggleTheme} />
+            <Header theme={theme} onToggleTheme={toggleTheme} username={githubAuth?.username} />
 
             {!showDashboard ? (
                 <main className="flex-grow container mx-auto p-4 lg:p-6 flex flex-col gap-6 relative z-10 justify-center max-w-2xl overflow-y-auto">

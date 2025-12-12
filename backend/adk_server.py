@@ -24,9 +24,16 @@ from tools.vultr_manager import deploy_to_vultr, destroy_vultr_sandbox
 from tools.git_workspace import clone_repository, create_branch, commit_changes, push_changes
 from tools.dockerfile_generator import generate_dockerfile
 from tools.github_client import GitHubClient
+from tools.raindrop_client import RaindropClient
+from tools.database import db
+from tools.evidence_manager import evidence_locker
 
 app = Flask(__name__)
 CORS(app)
+
+# Initialize DB on startup
+with app.app_context():
+    db.init_db()
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
 # Swagger UI configuration
@@ -147,6 +154,48 @@ def start_full_scan() -> Response:
 
         yield f"data: {json.dumps({'type': 'state', 'payload': {'sast_report': sast_report}})}\n\n"
         yield f"data: {json.dumps({'type': 'node_status', 'payload': {'node': 'sast_scan', 'status': 'success'}})}\n\n"
+
+        # Evidence Locker: Archive Report to GCS
+        try:
+            yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Archiving scan evidence to Google Cloud Storage...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+            evidence_link = evidence_locker.archive_report(unique_id, "sast_report", sast_report)
+            if evidence_link:
+                scan_state["evidence_link"] = evidence_link
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': f'Evidence archived: {evidence_link}', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
+        except Exception as e:
+            print(f"Evidence archive failed: {e}")
+
+        # Raindrop Integration: Bookmark Findings
+        try:
+            # Try to get token from DB first (using username if available), else fallback to env
+            # For now, we don't have the username in this scope easily without passing it down, 
+            # so we will use the env var as default or a specific user if we had one.
+            # In a real multi-user scenario, 'username' would be passed to start_full_scan
+            
+            # Placeholder: Check if we have a token in DB for a default user or the current user
+            # db_token = db.get_user_token(username) 
+            
+            raindrop_token = os.environ.get("RAINDROP_TOKEN")
+            
+            if raindrop_token:
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Syncing findings to Raindrop Knowledge Base...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
+                rd_client = RaindropClient(raindrop_token)
+                col_id = rd_client.get_or_create_collection("RiskGuard Security Playbook")
+                
+                if col_id:
+                    scan_state["raindrop_link"] = f"https://app.raindrop.io/my/{col_id}"
+                
+                # Bookmark the Repo
+                rd_client.create_raindrop(repo_url, f"Scan Target: {repo_url.split('/')[-1]}", col_id, ["riskguard", "scan-target"])
+                
+                # Bookmark Vulnerabilities (if they have references)
+                for v in sast_report.get('vulnerabilities', []):
+                    vuln_id = v.get("id") or v.get("ruleId")
+                    if vuln_id and isinstance(vuln_id, str) and "CVE" in vuln_id.upper():
+                         nvd_link = f"https://nvd.nist.gov/vuln/detail/{vuln_id}"
+                         rd_client.create_raindrop(nvd_link, f"Fix {vuln_id}", col_id, ["riskguard", "cve", "security-fix"])
+        except Exception as e:
+            print(f"Raindrop sync failed: {e}")
 
         # 4. Generate Fixes
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'Generating fixes for detected vulnerabilities...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
@@ -276,7 +325,9 @@ def start_full_scan() -> Response:
             final_report = {
                 "status": status,
                 "summary": "Scan complete. Waiting for user approval to create PR.",
-                "pr_url": None
+                "pr_url": None,
+                "evidence_link": scan_state.get("evidence_link"),
+                "raindrop_link": scan_state.get("raindrop_link")
             }
             scan_state["final_report"] = final_report
 

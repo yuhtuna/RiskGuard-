@@ -30,20 +30,28 @@ export type FinalReport = {
     sastReport?: SastFinding[];
     pr_url?: string;
     summary?: string;
+    evidence_link?: string;
+    raindrop_link?: string;
 } | {
     status: 'POTENTIAL_VULNERABILITY';
     sastReport?: SastFinding[];
     pr_url?: string;
     summary?: string;
+    evidence_link?: string;
+    raindrop_link?: string;
 } | {
     status: 'BUILD_FAILED';
     message: string;
     pr_url?: string;
     summary?: string;
+    evidence_link?: string;
+    raindrop_link?: string;
 } | {
     status: 'SECURE_VERIFIED';
     pr_url?: string;
     summary?: string;
+    evidence_link?: string;
+    raindrop_link?: string;
 } | null;
 
 export type EducationalInfo = {
