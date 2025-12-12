@@ -23,6 +23,7 @@ const HomePage: React.FC = () => {
         isModalOpen,
         scanError,
         appliedFixes,
+        sessionId,
     } = state;
     const [theme, setTheme] = useState<Theme>(() => {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -148,7 +149,7 @@ const HomePage: React.FC = () => {
             const downloadResponse = await fetch('/api/download', { // Use relative path
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ graph_state: graphState }),
+                body: JSON.stringify({ graph_state: graphState, sessionId }),
             });
 
             if (!downloadResponse.ok) {
@@ -185,7 +186,7 @@ const HomePage: React.FC = () => {
             const response = await fetch('/api/finish', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ graph_state: graphState }),
+                body: JSON.stringify({ graph_state: graphState, sessionId }),
             });
 
             if (!response.ok) {

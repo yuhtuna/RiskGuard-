@@ -34,6 +34,9 @@ export function useSse(dispatch: React.Dispatch<Action>, actionMap: Record<strin
                                 const { type, payload } = data;
                                 console.log('SSE event received:', type, payload);
                                 switch (type) {
+                                    case 'session_init':
+                                        dispatch({ type: 'SET_SESSION_ID', payload: payload.sessionId });
+                                        break;
                                     case 'node_status':
                                         dispatch({ type: 'SET_NODE_STATUS', payload });
                                         if (payload.status === 'active') {

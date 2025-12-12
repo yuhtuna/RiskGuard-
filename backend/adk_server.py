@@ -24,7 +24,6 @@ from tools.vultr_manager import deploy_to_vultr, destroy_vultr_sandbox
 from tools.git_workspace import clone_repository, create_branch, commit_changes, push_changes
 from tools.dockerfile_generator import generate_dockerfile
 from tools.github_client import GitHubClient
-from tools.raindrop_client import RaindropClient
 from tools.database import db
 from tools.evidence_manager import evidence_locker
 
@@ -56,11 +55,6 @@ GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "your-gcs-bucket-name")
 SKIP_GCP_DEPLOYMENT = os.environ.get("SKIP_GCP_DEPLOYMENT", "true").lower() == "true"
 SANDBOX_PROVIDER = os.environ.get("SANDBOX_PROVIDER", "GCP").upper()
 
-# Use a unique temp directory per scan to avoid permission conflicts
-scan_state = {
-    "local_repo_path": None,  # Will be set per scan
-}
-
 @app.route('/api/swagger.json')
 def swagger_spec():
     """Serve the OpenAPI specification file"""
@@ -88,6 +82,8 @@ def github_login() -> Dict[str, Any]:
     repos = client.list_user_repos()
     return jsonify({"success": True, "message": message, "repos": repos})
 
+import uuid
+
 @app.route('/api/scan', methods=['POST'])
 @cross_origin()
 def start_full_scan() -> Response:
@@ -104,12 +100,38 @@ def start_full_scan() -> Response:
     if not repo_url:
         return jsonify({'error': 'repo_url not provided'}), 400
     
+    # Generate Session ID
+    session_id = str(uuid.uuid4())
+    
+    # Initial State
+    scan_state = {
+        "local_repo_path": None,
+        "repo_url": repo_url,
+        "token": token,
+        "default_branch": default_branch,
+        "sast_report": None,
+        "dast_report": None,
+        "suggested_fixes": None,
+        "fix_branch": None,
+        "sandbox_url": None,
+        "service_name": None,
+        "attack_plan": None,
+        "pr_details": None,
+        "final_report": None,
+        "status": "initializing"
+    }
+    
+    # Save initial state to LiquidMetal SmartBucket
+    db.save_scan_state(session_id, scan_state)
+
     def generate_autonomous_events():
+        # Pass session_id to frontend so it can track
+        yield f"data: {json.dumps({'type': 'session_init', 'payload': {'sessionId': session_id}})}\n\n"
+        
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'start', 'log': {'message': 'Scan initiated...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
 
         # Create a unique temp directory
-        import uuid
-        unique_id = str(uuid.uuid4())[:8]
+        unique_id = session_id[:8]
         local_repo_path = os.path.join(tempfile.gettempdir(), f'riskguard_scan_{unique_id}')
         
         # Clean up existing
@@ -117,9 +139,7 @@ def start_full_scan() -> Response:
             shutil.rmtree(local_repo_path, ignore_errors=True)
         
         scan_state["local_repo_path"] = local_repo_path
-        scan_state["repo_url"] = repo_url
-        scan_state["token"] = token
-        scan_state["default_branch"] = default_branch
+        db.save_scan_state(session_id, scan_state)
         
         # 1. Clone Repo
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'file_upload', 'log': {'message': f'Cloning repository {repo_url}...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
@@ -147,6 +167,7 @@ def start_full_scan() -> Response:
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Scanning code for vulnerabilities...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         sast_report = run_sast_scan(local_repo_path)
         scan_state["sast_report"] = sast_report
+        db.save_scan_state(session_id, scan_state)
 
         # Inject simulated thought
         vuln_count = len(sast_report.get('vulnerabilities', []))
@@ -161,39 +182,38 @@ def start_full_scan() -> Response:
             evidence_link = evidence_locker.archive_report(unique_id, "sast_report", sast_report)
             if evidence_link:
                 scan_state["evidence_link"] = evidence_link
+                db.save_scan_state(session_id, scan_state)
                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': f'Evidence archived: {evidence_link}', 'type': 'success', 'timestamp': str(time.time())}}})}\n\n"
         except Exception as e:
             print(f"Evidence archive failed: {e}")
 
         # Raindrop Integration: Bookmark Findings
         try:
-            # Try to get token from DB first (using username if available), else fallback to env
-            # For now, we don't have the username in this scope easily without passing it down, 
-            # so we will use the env var as default or a specific user if we had one.
-            # In a real multi-user scenario, 'username' would be passed to start_full_scan
-            
-            # Placeholder: Check if we have a token in DB for a default user or the current user
-            # db_token = db.get_user_token(username) 
-            
             raindrop_token = os.environ.get("RAINDROP_TOKEN")
             
             if raindrop_token:
                 yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Syncing findings to Raindrop Knowledge Base...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
-                rd_client = RaindropClient(raindrop_token)
-                col_id = rd_client.get_or_create_collection("RiskGuard Security Playbook")
                 
-                if col_id:
-                    scan_state["raindrop_link"] = f"https://app.raindrop.io/my/{col_id}"
+                # Use LiquidMetal SmartBucket for Security Playbook
+                yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'sast_scan', 'log': {'message': 'Saving findings to LiquidMetal SmartBucket (Security Playbook)...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
                 
-                # Bookmark the Repo
-                rd_client.create_raindrop(repo_url, f"Scan Target: {repo_url.split('/')[-1]}", col_id, ["riskguard", "scan-target"])
+                playbook_data = {
+                    "repo_url": repo_url,
+                    "vulnerabilities": sast_report.get('vulnerabilities', []),
+                    "timestamp": str(time.time())
+                }
                 
-                # Bookmark Vulnerabilities (if they have references)
-                for v in sast_report.get('vulnerabilities', []):
-                    vuln_id = v.get("id") or v.get("ruleId")
-                    if vuln_id and isinstance(vuln_id, str) and "CVE" in vuln_id.upper():
-                         nvd_link = f"https://nvd.nist.gov/vuln/detail/{vuln_id}"
-                         rd_client.create_raindrop(nvd_link, f"Fix {vuln_id}", col_id, ["riskguard", "cve", "security-fix"])
+                # Assuming db.client is the LiquidMetal Raindrop client
+                if db.client:
+                    db.client.bucket.put(
+                        bucket_location="riskguard-playbook", 
+                        key=f"{unique_id}.json", 
+                        content=json.dumps(playbook_data),
+                        content_type="application/json"
+                    )
+                    scan_state["raindrop_link"] = f"liquidmetal://riskguard-playbook/{unique_id}.json" # Mock link for now
+                    db.save_scan_state(session_id, scan_state)
+
         except Exception as e:
             print(f"Raindrop sync failed: {e}")
 
@@ -201,6 +221,7 @@ def start_full_scan() -> Response:
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'generate_fixes', 'log': {'message': 'Generating fixes for detected vulnerabilities...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
         fixes = generate_fixes(sast_report, local_repo_path)
         scan_state["suggested_fixes"] = fixes
+        db.save_scan_state(session_id, scan_state)
         yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes}})}\n\n"
 
         if not fixes:
@@ -350,8 +371,14 @@ def submit_pr() -> Dict[str, Any]:
     """
     print("[API] /api/finish called. Submitting PR...")
     data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
+    session_id = data.get('sessionId')
+    
+    if not session_id:
+        return jsonify({"error": "Session ID is required"}), 400
+        
+    scan_state = db.get_scan_state(session_id)
+    if not scan_state:
+        return jsonify({"error": "Session not found or expired"}), 404
 
     branch_name = scan_state.get("fix_branch")
     token = scan_state.get("token")
@@ -403,8 +430,14 @@ def download_fixed_code() -> Any:
     Zips the fixed code and returns it as a Base64-encoded string.
     """
     data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
+    session_id = data.get('sessionId')
+    
+    if not session_id:
+        return jsonify({"error": "Session ID is required"}), 400
+        
+    scan_state = db.get_scan_state(session_id)
+    if not scan_state:
+        return jsonify({"error": "Session not found or expired"}), 404
 
     local_path = scan_state.get("local_repo_path")
     if not local_path or not os.path.exists(local_path):
@@ -432,8 +465,14 @@ def regenerate_fixes_endpoint() -> Response:
 
 def regenerate_fixes_logic():
     data = request.get_json()
-    current_graph_state = data.get('graph_state', {})
-    scan_state.update(current_graph_state)
+    session_id = data.get('sessionId')
+    
+    if not session_id:
+        return jsonify({"error": "Session ID is required"}), 400
+        
+    scan_state = db.get_scan_state(session_id)
+    if not scan_state:
+        return jsonify({"error": "Session not found or expired"}), 404
 
     def generate_fixes_events():
         yield f"data: {json.dumps({'type': 'log', 'payload': {'actionKey': 'regenerate_fixes', 'log': {'message': 'Regenerating fixes...', 'type': 'info', 'timestamp': str(time.time())}}})}\n\n"
@@ -453,6 +492,7 @@ def regenerate_fixes_logic():
 
         scan_state["suggested_fixes"] = fixes
         scan_state["dast_report"] = None # Reset DAST for next run
+        db.save_scan_state(session_id, scan_state)
 
         yield f"data: {json.dumps({'type': 'state', 'payload': {'suggested_fixes': fixes, 'dast_report': None}})}\n\n"
         yield f"data: {json.dumps({'type': 'control', 'payload': {'status': 'paused'}})}\n\n"

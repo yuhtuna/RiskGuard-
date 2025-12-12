@@ -10,6 +10,7 @@ export interface AppState {
     isModalOpen: boolean;
     scanError: string | null;
     appliedFixes: string[];
+    sessionId: string | null;
 }
 
 export const initialState: AppState = {
@@ -21,6 +22,7 @@ export const initialState: AppState = {
     isModalOpen: false,
     scanError: null,
     appliedFixes: [],
+    sessionId: null,
 };
 
 export type Action =
@@ -34,7 +36,8 @@ export type Action =
     | { type: 'ADD_DETAIL_LOG'; payload: { actionKey: NodeKey | string; log: any } }
     | { type: 'SET_IS_MODAL_OPEN'; payload: boolean }
     | { type: 'SET_SCAN_ERROR'; payload: string | null }
-    | { type: 'ADD_APPLIED_FIX'; payload: string };
+    | { type: 'ADD_APPLIED_FIX'; payload: string }
+    | { type: 'SET_SESSION_ID'; payload: string };
 
 export function reducer(state: AppState, action: Action): AppState {
     switch (action.type) {
@@ -42,6 +45,8 @@ export function reducer(state: AppState, action: Action): AppState {
             return initialState;
         case 'SET_IS_RUNNING':
             return { ...state, isRunning: action.payload };
+        case 'SET_SESSION_ID':
+            return { ...state, sessionId: action.payload };
         case 'SET_ACTIVE_NODE':
             return { ...state, activeNode: action.payload };
         case 'SET_NODE_STATUS':
