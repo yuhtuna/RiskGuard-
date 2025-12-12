@@ -1,5 +1,14 @@
 Flask==3.0.3
+Flask-Cors
 GitPython==3.1.43
 google-cloud-build==3.23.0
-google-cloud-run-v2==0.13.0
-gunicorn==22.0.0
+google-cloud-run
+google-cloud-storage
+gunicorn
+python-dotenv
+langchain
+langchain-core
+langchain-google-genai
+PyGithub
+flask-swagger-ui
+requests

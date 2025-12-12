@@ -1,0 +1,355 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "RiskGuard Security Scanner API",
+    "description": "API for automated security scanning with SAST, DAST, and vulnerability analysis",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/api/scan": {
+      "post": {
+        "summary": "Start Full Security Scan",
+        "description": "Accepts a Base64-encoded ZIP file, extracts it, deploys to sandbox, and performs SAST scanning. Returns Server-Sent Events (SSE) stream with real-time progress updates.",
+        "tags": ["Scanning"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["zip_file_base64"],
+                "properties": {
+                  "zip_file_base64": {
+                    "type": "string",
+                    "description": "Base64-encoded ZIP file containing source code to scan",
+                    "example": "UEsDBBQAAAAIAO..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream with scan progress and results",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream containing JSON objects with type (node_status, log, state, control) and payload data"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing zip_file_base64",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error during scanning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/apply-fix": {
+      "post": {
+        "summary": "Apply Security Fix",
+        "description": "Applies a Git patch to fix a detected vulnerability in the scanned code",
+        "tags": ["Fixes"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["patch", "graph_state"],
+                "properties": {
+                  "patch": {
+                    "type": "string",
+                    "description": "Git-formatted patch to apply",
+                    "example": "diff --git a/file.py b/file.py\n..."
+                  },
+                  "graph_state": {
+                    "type": "object",
+                    "description": "Current state of the scan workflow",
+                    "properties": {
+                      "local_repo_path": {
+                        "type": "string"
+                      },
+                      "sandbox_url": {
+                        "type": "string"
+                      },
+                      "service_name": {
+                        "type": "string"
+                      },
+                      "sast_report": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/SASTFinding"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Patch applied successfully, returns updated scan state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error applying patch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/continue-scan": {
+      "post": {
+        "summary": "Continue Scan with DAST",
+        "description": "Continues the security scan by running DAST (Dynamic Application Security Testing) and cleaning up the sandbox environment. Returns SSE stream with progress.",
+        "tags": ["Scanning"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["graph_state"],
+                "properties": {
+                  "graph_state": {
+                    "type": "object",
+                    "description": "Current state of the scan workflow",
+                    "$ref": "#/components/schemas/ScanState"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream with DAST scan progress",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream with DAST results"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/download": {
+      "post": {
+        "summary": "Download Fixed Code",
+        "description": "Zips the fixed code and returns it as a Base64-encoded string",
+        "tags": ["Download"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["graph_state"],
+                "properties": {
+                  "graph_state": {
+                    "type": "object",
+                    "description": "Current state of the scan workflow",
+                    "$ref": "#/components/schemas/ScanState"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Base64-encoded ZIP file containing fixed code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Base64-encoded ZIP file",
+                      "example": "UEsDBBQAAAAIAO..."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          }
+        }
+      },
+      "SASTFinding": {
+        "type": "object",
+        "properties": {
+          "vulnerability_type": {
+            "type": "string",
+            "example": "SQL Injection"
+          },
+          "file": {
+            "type": "string",
+            "example": "src/main.py"
+          },
+          "line": {
+            "type": "integer",
+            "example": 42
+          },
+          "flaw": {
+            "type": "string",
+            "example": "Unsanitized user input in SQL query"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+          }
+        }
+      },
+      "DASTFinding": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["SUCCESS", "FAILURE"]
+          },
+          "proof_of_exploit": {
+            "type": "string",
+            "description": "Evidence of successful exploitation"
+          }
+        }
+      },
+      "ScanState": {
+        "type": "object",
+        "properties": {
+          "local_repo_path": {
+            "type": "string",
+            "description": "Path to extracted source code"
+          },
+          "sandbox_url": {
+            "type": "string",
+            "description": "URL of deployed sandbox environment"
+          },
+          "service_name": {
+            "type": "string",
+            "description": "Name of Cloud Run service"
+          },
+          "sast_report": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SASTFinding"
+            }
+          },
+          "suggested_fixes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Git patch for fixing vulnerability"
+            }
+          },
+          "dast_report": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DASTFinding"
+            }
+          },
+          "final_report": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["VULNERABILITY_CONFIRMED", "POTENTIAL_VULNERABILITY", "BUILD_FAILED", "NO_VULNERABILITIES"]
+              },
+              "message": {
+                "type": "string"
+              },
+              "sastReport": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SASTFinding"
+                }
+              },
+              "dastReport": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DASTFinding"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
