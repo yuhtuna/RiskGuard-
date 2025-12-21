@@ -1,103 +1,142 @@
-# HAST Agent Workflow Visualizer
+# RiskGuard: Autonomous AI Security Architect
 
-This project is a full-stack application designed to demonstrate an AI-driven security workflow. It analyzes an uploaded user application, deploys it to a temporary sandbox environment on Google Cloud, runs a generative AI-powered SAST (Static Application Security Testing) scan, generates potential fixes, and orchestrates a DAST (Dynamic Application Security Testing) scan based on the findings.
+RiskGuard is an advanced, autonomous security platform that uses a multi-agent AI system to **Scan**, **Fix**, **Deploy**, and **Verify** applications automatically. It goes beyond simple reporting by actively healing codebases and verifying fixes in real-world sandbox environments.
 
-## Project Architecture
+![RiskGuard Dashboard](https://via.placeholder.com/800x400?text=RiskGuard+Dashboard+Preview)
 
-The application is composed of two main parts:
+## 🚀 Key Features
 
-1.  **Frontend:** A React-based single-page application built with Vite that provides the user interface for uploading an application, initiating scans, viewing progress, and interacting with the results.
-2.  **Backend:** A Python server built with the **Google Application Development Kit (ADK)** that orchestrates the entire security workflow, including interacting with Google Cloud services and running the various scanning and fixing "agents."
+*   **Autonomous Self-Healing Loop**: Detects vulnerabilities, generates code fixes, applies them, and verifies them without human intervention.
+*   **Multi-Agent Architecture**:
+    *   **SAST Agent**: Static analysis to find code flaws.
+    *   **Fixer Agent**: Generates context-aware patches using LLMs.
+    *   **Planning Agent**: Orchestrates the attack and verification strategy.
+    *   **DAST Agent**: Executes dynamic exploits against a live sandbox to confirm vulnerabilities.
+*   **Liquid Metal Integration**:
+    *   **SmartBuckets**: Uses `riskguard-state` for session persistence and `riskguard-playbook` for storing security findings.
+    *   **Evidence Locker**: Securely archives scan reports and proof-of-exploit data.
+*   **Multi-Cloud Sandbox Support**:
+    *   **Google Cloud Run**: Deploys sandboxes to serverless containers.
+    *   **Vultr**: Deploys sandboxes to high-performance cloud instances.
+*   **Interactive Dashboard**: Real-time visualization of the agent's thought process, scan progress, and vulnerability reports.
 
-## Prerequisites
+## 🏗️ Architecture
 
-Before you begin, ensure you have the following installed:
+RiskGuard consists of a **React Frontend** and a **Python Flask Backend**.
 
-*   **Node.js** (v18 or later)
-*   **Python** (v3.12 or later)
-*   **pip** (Python package installer)
-*   **Google Cloud SDK** (`gcloud` CLI)
-*   **A Secure Cloud Run Job for DAST:** You must have a separate, secure Cloud Run Job deployed to execute DAST attacks.
+```mermaid
+graph TD
+    User[User] -->|Uploads Repo| Frontend[React Frontend]
+    Frontend -->|SSE Stream| Backend[Flask Backend]
+    Backend -->|Persist State| LM[Liquid Metal SmartBuckets]
+    Backend -->|Clone & Scan| SAST[SAST Agent]
+    SAST -->|Report| Fixer[Fixer Agent]
+    Fixer -->|Apply Patch| Git[Git Workspace]
+    Git -->|Deploy| Sandbox[Cloud Sandbox (GCP/Vultr)]
+    Sandbox -->|Verify| DAST[DAST Agent]
+    DAST -->|Confirm| Report[Final Report]
+```
 
-## Setup and Configuration
+## 🛠️ Prerequisites
 
-### 1. Google Cloud Project
+*   **Node.js** (v18+)
+*   **Python** (v3.12+)
+*   **Docker** (for containerization)
+*   **Google Cloud SDK** (if using GCP sandboxes)
+*   **Liquid Metal Account** (for SmartBuckets)
 
-You will need a Google Cloud project with the following APIs enabled:
+## ⚙️ Configuration
 
-*   Cloud Build API (`cloudbuild.googleapis.com`)
-*   Cloud Run Admin API (`run.googleapis.com`)
-*   Identity and Access Management (IAM) API (`iam.googleapis.com`)
-*   Cloud Storage API (`storage.googleapis.com`)
+Create a `.env` file in the `backend/` directory with the following variables:
 
-You will also need a Google Cloud Storage (GCS) bucket to temporarily store the source code for the Cloud Build process.
+```ini
+# --- Core Security ---
+OPENAI_API_KEY=sk-...          # Required for AI Agents
+RAINDROP_API_KEY=...           # Required for Liquid Metal SmartBuckets
 
-### 2. Backend Setup
+# --- Sandbox Provider (GCP or VULTR) ---
+SANDBOX_PROVIDER=GCP           # or VULTR
+SKIP_GCP_DEPLOYMENT=false      # Set to true for local-only testing
 
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd backend
+# --- Google Cloud Config (if using GCP) ---
+GCP_PROJECT_ID=your-project-id
+GCP_REGION=us-central1
+GCS_BUCKET_NAME=your-evidence-bucket
+
+# --- Vultr Config (if using Vultr) ---
+VULTR_API_KEY=...
+
+# --- GitHub Integration ---
+GITHUB_TOKEN=...               # Optional: For higher API limits and PR creation
+```
+
+## 🚀 Getting Started (Local Development)
+
+### 1. Backend Setup
+```bash
+cd backend
+python -m venv venv
+# Windows
+.\venv\Scripts\Activate.ps1
+# Linux/Mac
+source venv/bin/activate
+
+pip install -r requirements.txt
+python adk_server.py
+```
+The backend will start on `http://localhost:8080`.
+
+### 2. Frontend Setup
+Open a new terminal:
+```bash
+npm install
+npm run dev
+```
+The frontend will start on `http://localhost:3000`.
+
+## ☁️ Deployment (Google Cloud Run)
+
+RiskGuard is designed to run as a containerized application on Google Cloud Run.
+
+1.  **Configure Project**:
+    Edit `deploy_to_cloud_run.ps1` or run it with parameters.
+
+2.  **Deploy**:
+    ```powershell
+    .\deploy_to_cloud_run.ps1 -ProjectId "YOUR_GCP_PROJECT_ID"
     ```
 
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+3.  **Post-Deployment**:
+    Go to the Cloud Run Console and set your `OPENAI_API_KEY` and `RAINDROP_API_KEY` as environment variables.
 
-3.  **Install the required Python dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    **Note:** The `requirements.txt` file contains pinned versions of all dependencies. This ensures that the application is built with the exact same libraries every time, which leads to faster and more reliable deployments, especially on Google Cloud Run.
+## 🧪 Usage Guide
 
-4.  **Authenticate with Google Cloud:**
-    ```bash
-    gcloud auth application-default login
-    ```
+1.  **Start a Scan**: Enter a GitHub repository URL (e.g., `https://github.com/user/vulnerable-app`).
+2.  **Monitor Progress**: Watch the "Live Agent Feed" as the system clones, scans, and analyzes the code.
+3.  **Review Fixes**: The Fixer Agent will propose code changes.
+4.  **Verify**: The system will deploy the patched app to a sandbox and run DAST attacks to verify the fix works.
+5.  **Remediate**: Click "Create Pull Request" to send the fixed code back to GitHub, or "Download Code" to get a zip file.
 
-5.  **Set Environment Variables:**
-    The backend requires the following environment variables to be set. You can set them directly in your shell or create a `.env` file and use a library like `python-dotenv`.
+## 📂 Project Structure
 
-    *   `GCP_PROJECT_ID`: Your Google Cloud project ID.
-    *   `GCP_REGION`: The Google Cloud region where you want to deploy the sandbox services (e.g., `us-central1`).
-    *   `GCS_BUCKET_NAME`: The name of your Google Cloud Storage bucket for source code.
-    *   `DAST_JOB_URL`: The URL of your secure Cloud Run Job for executing DAST exploits.
+*   `frontend/`: React application (Vite, Tailwind, Lucide).
+*   `backend/`: Python Flask server.
+    *   `agents/`: AI logic for SAST, DAST, and Fixing.
+    *   `tools/`: Integrations for Git, Docker, Liquid Metal, Vultr, etc.
+    *   `adk_server.py`: Main API entry point.
+*   `Dockerfile`: Multi-stage build for production.
 
-### 3. Frontend Setup
+## 🤝 Contributing
 
-1.  **Navigate to the project root directory.**
+1.  Fork the repository.
+2.  Create a feature branch (`git checkout -b feature/amazing-feature`).
+3.  Commit your changes.
+4.  Push to the branch.
+5.  Open a Pull Request.
 
-2.  **Install the required Node.js dependencies:**
-    ```bash
-    npm install
-    ```
+## 📄 License
 
-## Running the Application
-
-You will need to run both the backend and frontend servers simultaneously in two separate terminals.
-
-1.  **Start the Backend Server:**
-    *   Make sure you are in the `backend` directory with your virtual environment activated.
-    *   Ensure your environment variables are set.
-    *   Run the ADK server using Flask:
-        ```bash
-        export FLASK_APP=adk_server.py
-        flask run --port=8080
-        ```
-    The backend server will start on `http://localhost:8080`.
-
-2.  **Start the Frontend Server:**
-    *   Navigate to the project root directory.
-    *   Run the Vite development server:
-        ```bash
-        npm run dev
-        ```
-    The frontend application will be available at `http://localhost:3000`.
-
-## How It Works
-
-1.  Open the application in your browser (`http://localhost:3000`).
+MIT License - see `LICENSE` for details.
 2.  Upload a ZIP file of the application you want to scan.
 3.  Click "Start Scan." The backend will begin the workflow, and you will see real-time progress updates in the UI.
 4.  The scan will pause after the SAST scan is complete and suggested fixes have been generated.

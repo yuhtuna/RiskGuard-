@@ -42,7 +42,7 @@ class RiskGuardDB:
             
             # Actually, looking at the dir(client), it has 'bucket'. 
             # Let's assume the usage is client.bucket.get(bucket_name, key)
-            response = self.client.bucket.get(self.db_name, file_key)
+            response = self.client.bucket.get(bucket_location=self.db_name, key=file_key)
             
             if response and hasattr(response, 'content'):
                 data = json.loads(response.content)
@@ -69,13 +69,39 @@ class RiskGuardDB:
             
             # Upload/Put the file
             self.client.bucket.put(
-                self.db_name, 
-                file_key, 
-                json.dumps(data)
+                bucket_location=self.db_name, 
+                key=file_key, 
+                content=json.dumps(data),
+                content_type="application/json"
             )
             print(f"Token saved for user {username} in SmartBucket")
         except Exception as e:
             print(f"Error saving user token: {e}")
+
+    def save_scan_state(self, session_id: str, state_data: dict):
+        """Saves scan state to LiquidMetal SmartBucket"""
+        if not self.client: return
+        try:
+            self.client.bucket.put(
+                bucket_location="riskguard-state",  # Bucket name
+                key=f"{session_id}.json", 
+                content=json.dumps(state_data),
+                content_type="application/json"
+            )
+        except Exception as e:
+            print(f"LiquidMetal Save Error: {e}")
+
+    def get_scan_state(self, session_id: str) -> Optional[dict]:
+        """Retrieves scan state from LiquidMetal SmartBucket"""
+        if not self.client: return None
+        try:
+            response = self.client.bucket.get(bucket_location="riskguard-state", key=f"{session_id}.json")
+            if response and hasattr(response, 'content'):
+                return json.loads(response.content)
+            return None
+        except Exception as e:
+            print(f"LiquidMetal Get Error: {e}")
+            return None
 
 # Global DB Instance
 db = RiskGuardDB()
