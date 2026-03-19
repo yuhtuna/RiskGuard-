@@ -32,7 +32,7 @@ graph TD
     Backend -->|Clone & Scan| SAST[SAST Agent]
     SAST -->|Report| Fixer[Fixer Agent]
     Fixer -->|Apply Patch| Git[Git Workspace]
-    Git -->|Deploy| Sandbox[Cloud Sandbox (GCP/Vultr)]
+    Git -->|Deploy| Sandbox["Cloud Sandbox (GCP/Vultr)"]
     Sandbox -->|Verify| DAST[DAST Agent]
     DAST -->|Confirm| Report[Final Report]
 ```
@@ -47,7 +47,7 @@ graph TD
 ## ⚙️ Configuration
 Create a `.env` file in the `backend/` directory with the following variables:
 
-```toml
+```dotenv
 # --- Core Security ---
 OPENAI_API_KEY=sk-...          # Required for AI Agents
 RAINDROP_API_KEY=...           # Required for Liquid Metal SmartBuckets
@@ -75,7 +75,7 @@ GITHUB_TOKEN=...               # Optional: For higher API limits and PR creation
 cd backend
 python -m venv venv
 # Windows
-.\venv\Scripts\Activate.ps1
+.\\venv\\Scripts\\Activate.ps1
 # Linux/Mac
 source venv/bin/activate
 
@@ -100,7 +100,7 @@ Edit `deploy_to_cloud_run.ps1` or run it with parameters.
 
 Deploy:
 ```powershell
-.\deploy_to_cloud_run.ps1 -ProjectId "YOUR_GCP_PROJECT_ID"
+.\\deploy_to_cloud_run.ps1 -ProjectId "YOUR_GCP_PROJECT_ID"
 ```
 Post-Deployment:
 Go to the Cloud Run Console and set your `OPENAI_API_KEY` and `RAINDROP_API_KEY` as environment variables.
