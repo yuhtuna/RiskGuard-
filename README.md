@@ -2,7 +2,6 @@
 
 RiskGuard is an advanced, autonomous security platform that uses a multi-agent AI system to **Scan**, **Fix**, **Deploy**, and **Verify** applications automatically. It goes beyond simple reporting by actively healing codebases and verifying fixes in real-world sandbox environments.
 
-![RiskGuard Dashboard](https://via.placeholder.com/800x400?text=RiskGuard+Dashboard+Preview)
 
 ## 🚀 Key Features
 
